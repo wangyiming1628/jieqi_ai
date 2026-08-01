@@ -58,13 +58,13 @@ for d in dets:
     h, w = full.shape[:2]
 
     gray = cv2.cvtColor(full, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.medianBlur(gray, 5)
-    circles = cv2.HoughCircles(blurred, cv2.HOUGH_GRADIENT, dp=1.0, minDist=80,
-                                param1=80, param2=30, minRadius=25, maxRadius=55)
-    if circles is not None:
-        pcx, pcy = map(int, circles[0][0][:2])
-    else:
-        pcx, pcy = w // 2, h // 2
+    edges = cv2.Canny(gray, 50, 150)
+    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    pcx, pcy = w // 2, h // 2
+    if contours:
+        largest = max(contours, key=cv2.contourArea)
+        (px, py), _ = cv2.minEnclosingCircle(largest)
+        pcx, pcy = int(px), int(py)
 
     S = int(min(d["w"], d["h"]) * 0.58)
     cx2 = max(0, int(x1 + pcx - S//2))

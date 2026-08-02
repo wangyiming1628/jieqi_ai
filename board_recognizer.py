@@ -1,7 +1,8 @@
 """
 棋盘识别器 - 封装 YOLO + PaddleOCR 识别逻辑
 """
-import os, cv2, sys, numpy as np
+import os, cv2, sys, time, subprocess, numpy as np
+from typing import Optional, List
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from yolo_detector import YOLOChessDetector
 from paddleocr import PaddleOCR
@@ -9,6 +10,161 @@ from paddleocr import PaddleOCR
 CHESS = "帥仕相馬車炮兵將士象卒"
 RED_ONLY = set("帥仕相兵")
 BLACK_ONLY = set("將士象卒")
+
+
+class ScreenCapture:
+    """macOS 后台窗口截屏器"""
+
+    def __init__(self, target_title: str = "天天象棋", target_owner: str = "微信"):
+        if sys.platform != "darwin":
+            raise OSError("ScreenCapture 仅支持 macOS")
+        self.target_title = target_title
+        self.target_owner = target_owner
+        self.window_id = None
+        self.window_bounds = None  # (x, y, width, height)
+        self.window_name = ""
+
+    def find_window(self) -> bool:
+        infos = self._list_windows()
+        for info in infos:
+            owner = info.get("kCGWindowOwnerName", "")
+            name = info.get("kCGWindowName", "")
+            if owner == self.target_owner and name == self.target_title:
+                return self._set_window(info)
+        candidates = []
+        for info in infos:
+            owner = info.get("kCGWindowOwnerName", "")
+            if owner != self.target_owner:
+                continue
+            name = info.get("kCGWindowName", "")
+            layer = info.get("kCGWindowLayer", 0)
+            bounds = info.get("kCGWindowBounds", {})
+            w = int(bounds.get("Width", 0))
+            h = int(bounds.get("Height", 0))
+            if name == "微信":
+                continue
+            if layer > 0:
+                continue
+            if w < 700 or h < 400:
+                continue
+            candidates.append((w * h, info))
+        if candidates:
+            candidates.sort(key=lambda x: x[0], reverse=True)
+            return self._set_window(candidates[0][1])
+        candidates = []
+        for info in infos:
+            owner = info.get("kCGWindowOwnerName", "")
+            if owner != self.target_owner:
+                continue
+            name = info.get("kCGWindowName", "")
+            bounds = info.get("kCGWindowBounds", {})
+            w = int(bounds.get("Width", 0))
+            h = int(bounds.get("Height", 0))
+            if name == "微信":
+                continue
+            if w < 400 or h < 300:
+                continue
+            candidates.append((w * h, info))
+        if candidates:
+            candidates.sort(key=lambda x: x[0], reverse=True)
+            return self._set_window(candidates[0][1])
+        print(f"[!] 未找到窗口: [{self.target_owner}] \"{self.target_title}\"")
+        return False
+
+    def _set_window(self, info: dict) -> bool:
+        self.window_id = info.get("kCGWindowNumber")
+        bounds = info.get("kCGWindowBounds", {})
+        self.window_bounds = (
+            int(bounds.get("X", 0)),
+            int(bounds.get("Y", 0)),
+            int(bounds.get("Width", 0)),
+            int(bounds.get("Height", 0)),
+        )
+        self.window_name = info.get("kCGWindowName", "")
+        owner = info.get("kCGWindowOwnerName", "")
+        print(f"[+] 目标窗口: [{owner}] \"{self.window_name}\" "
+              f"ID:{self.window_id} {self.window_bounds[2]}x{self.window_bounds[3]}")
+        return True
+
+    def _list_windows(self) -> List[dict]:
+        from Quartz import (
+            CGWindowListCopyWindowInfo,
+            kCGWindowListOptionOnScreenOnly,
+            kCGNullWindowID,
+        )
+        return CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly, kCGNullWindowID)
+
+    def capture(self, output_path: Optional[str] = None) -> Optional[np.ndarray]:
+        if self.window_id is None:
+            if not self.find_window():
+                return None
+        if output_path is None:
+            output_path = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)), "snapshot", "_tmp_capture.png"
+            )
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        try:
+            subprocess.run(
+                ["screencapture", f"-l{self.window_id}", "-x", output_path],
+                check=True,
+                timeout=5,
+            )
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+            print(f"[!] 截屏失败: {e}")
+            return None
+        if not os.path.exists(output_path):
+            return None
+        img = cv2.imread(output_path)
+        try:
+            os.remove(output_path)
+        except OSError:
+            pass
+        if img is None:
+            return None
+        h, w = img.shape[:2]
+        cx, cy = w // 2, h // 2
+        if sys.platform == "darwin":
+            crop_w, crop_h = 1529, 1695
+        else:
+            crop_w, crop_h = 1035, 1143
+        x1 = max(0, cx - crop_w // 2)
+        y1 = max(0, cy - crop_h // 2)
+        x2 = min(w, x1 + crop_w)
+        y2 = min(h, y1 + crop_h)
+        return img[y1:y2, x1:x2]
+
+    def capture_region(self, x: int, y: int, w: int, h: int) -> Optional[np.ndarray]:
+        img = self.capture()
+        if img is None:
+            return None
+        return img[y:y + h, x:x + w]
+
+    def save_snapshot(self, output_dir: str = None) -> Optional[str]:
+        img = self.capture()
+        if img is None:
+            return None
+        if output_dir is None:
+            output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "snapshot")
+        os.makedirs(output_dir, exist_ok=True)
+        ts = time.strftime("%Y%m%d_%H%M%S")
+        path = os.path.join(output_dir, f"capture_{ts}.png")
+        cv2.imencode(".png", img)[1].tofile(path)
+        print(f"[+] 截图已保存: {path}")
+        return path
+
+    def list_windows(self) -> List[dict]:
+        infos = self._list_windows()
+        windows = []
+        for info in infos:
+            windows.append({
+                "owner": info.get("kCGWindowOwnerName", ""),
+                "name": info.get("kCGWindowName", ""),
+                "id": info.get("kCGWindowNumber", 0),
+                "bounds": info.get("kCGWindowBounds", {}),
+                "layer": info.get("kCGWindowLayer", 0),
+            })
+        return windows
+
 
 class BoardRecognizer:
     def __init__(self):
@@ -18,6 +174,15 @@ class BoardRecognizer:
         self.char_list = self.rec.postprocess_op.character
         self.max_wh = self.rec.rec_image_shape[2] / self.rec.rec_image_shape[1]
         self._cache = {}  # (col, row) -> (cx, cy, char, conf, side)
+        self._capture = None  # macOS: ScreenCapture 实例
+        if sys.platform == "darwin":
+            self._capture = ScreenCapture(target_title="天天象棋", target_owner="微信")
+
+    def capture_screen(self):
+        """macOS: 从后台天天象棋窗口截取中心 1529x1695 区域；Windows: 返回 None（由 controller 截取）"""
+        if self._capture is not None:
+            return self._capture.capture()
+        return None
 
     def _raw_ocr(self, crop_bgr):
         rgb = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2RGB)

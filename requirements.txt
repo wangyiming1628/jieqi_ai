@@ -1,7 +1,10 @@
+python>=3.12,<3.13
 opencv-python
-numpy
+numpy<2
 Pillow
 pyautogui
 mss
 pywin32; sys_platform == 'win32'
 pyobjc-framework-Quartz; sys_platform == 'darwin'
+paddleocr==2.7.3
+onnxruntime

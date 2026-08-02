@@ -16,12 +16,15 @@ BOARD_OFFSET_Y = 6
 def main():
     print("[*] 揭棋 AI v1.3 启动中...")
     
-    controller = Controller(WINDOW_TITLE)
-    if not controller.connect():
-        print(f"[!] 未找到窗口: {WINDOW_TITLE}")
-        return
-
-    print(f"[+] 已连接: {WINDOW_TITLE}")
+    # macOS: 使用 ScreenCapture 后台截取天天象棋窗口，不需要 controller 连窗口
+    if sys.platform == "darwin":
+        controller = None
+    else:
+        controller = Controller(WINDOW_TITLE)
+        if not controller.connect():
+            print(f"[!] 未找到窗口: {WINDOW_TITLE}")
+            return
+        print(f"[+] 已连接: {WINDOW_TITLE}")
     
     print("[*] 初始化识别器...")
     recognizer = BoardRecognizer()
@@ -43,31 +46,32 @@ def main():
 
     while True:
         try:
-            img = controller.capture()
+            # macOS: 从后台天天象棋窗口截取；Windows: 从 controller 截取
+            if sys.platform == "darwin":
+                img = recognizer.capture_screen()
+            else:
+                img = controller.capture()
             if img is None:
                 time.sleep(SCAN_INTERVAL)
                 continue
 
+            # 从截图中心取棋盘区域，按平台使用不同硬编码尺寸
             h, w = img.shape[:2]
             cx, cy = w // 2, h // 2
-            x1 = max(0, cx - 1035 // 2)
-            y1 = max(0, cy - 1143 // 2)
-            x2 = min(w, cx + 1035 // 2)
-            y2 = min(h, cy + 1143 // 2)
+            if sys.platform == "darwin":
+                crop_w, crop_h = 1529, 1695
+            else:
+                crop_w, crop_h = 1035, 1143
+            x1 = max(0, cx - crop_w // 2)
+            y1 = max(0, cy - crop_h // 2)
+            x2 = min(w, x1 + crop_w)
+            y2 = min(h, y1 + crop_h)
             img = img[y1:y2, x1:x2]
 
             snapshot_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "snapshot")
             os.makedirs(snapshot_dir, exist_ok=True)
             ts = time.strftime("%H%M%S")
             cv2.imencode(".png", img)[1].tofile(os.path.join(snapshot_dir, f"{ts}.png"))
-
-            h, w = img.shape[:2]
-            cx, cy = w // 2, h // 2
-            x1 = max(0, cx - 1035 // 2)
-            y1 = max(0, cy - 1143 // 2)
-            x2 = min(w, cx + 1035 // 2)
-            y2 = min(h, cy + 1143 // 2)
-            img = img[y1:y2, x1:x2]
 
             board = recognizer.detect(img)
             board_hash = "|".join("".join(row) for row in board)

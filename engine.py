@@ -1,5 +1,7 @@
 import os
+import stat
 import subprocess
+import sys
 import threading
 import time
 import queue
@@ -115,13 +117,38 @@ class UCCIEngine:
         if not os.path.exists(engine_dir):
             return None
         candidates = sorted(os.listdir(engine_dir))
-        for f in candidates:
-            lower = f.lower()
-            if lower.endswith(".exe") and ("pikafish" in lower or "pika" in lower):
-                if "bmi2" in lower:
+
+        if sys.platform == "win32":
+            # Windows: 匹配 .exe 文件，优先 bmi2 变体
+            for f in candidates:
+                lower = f.lower()
+                if lower.endswith(".exe") and ("pikafish" in lower or "pika" in lower):
+                    if "bmi2" in lower:
+                        return os.path.join(engine_dir, f)
+            for f in candidates:
+                lower = f.lower()
+                if lower.endswith(".exe") and "pikafish" in lower:
                     return os.path.join(engine_dir, f)
-        for f in candidates:
-            lower = f.lower()
-            if lower.endswith(".exe") and "pikafish" in lower:
-                return os.path.join(engine_dir, f)
+        else:
+            # macOS / Linux: 匹配非 .exe 的 pikafish 二进制文件
+            # 优先选择不带指令集后缀的通用版本，其次 bmi2、avx2
+            priorities = ["pikafish", "bmi2", "avx2"]
+            for priority in priorities:
+                for f in candidates:
+                    lower = f.lower()
+                    if lower.endswith(".exe") or lower.endswith(".nnue"):
+                        continue
+                    if "pikafish" in lower and priority in lower:
+                        path = os.path.join(engine_dir, f)
+                        os.chmod(path, os.stat(path).st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+                        return path
+            # 兜底：任意包含 pikafish 的非 .exe 文件
+            for f in candidates:
+                lower = f.lower()
+                if lower.endswith(".exe") or lower.endswith(".nnue"):
+                    continue
+                if "pikafish" in lower:
+                    path = os.path.join(engine_dir, f)
+                    os.chmod(path, os.stat(path).st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+                    return path
         return None

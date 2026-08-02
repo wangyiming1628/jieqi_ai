@@ -9,8 +9,8 @@ from typing import List, Tuple, Optional
 
 # 7 种棋子类型
 PIECE_NAMES = ["K", "A", "B", "N", "R", "C", "P"]
-PIECE_CHINESE_RED = {"K": "帅", "A": "仕", "B": "相", "N": "马", "R": "車", "C": "炮", "P": "兵"}
-PIECE_CHINESE_BLACK = {"K": "将", "A": "士", "B": "象", "N": "马", "R": "車", "C": "砲", "P": "卒"}
+PIECE_CHINESE_RED = {"K": "帥", "A": "仕", "B": "相", "N": "馬", "R": "車", "C": "炮", "P": "兵"}
+PIECE_CHINESE_BLACK = {"K": "將", "A": "士", "B": "象", "N": "馬", "R": "車", "C": "炮", "P": "卒"}
 
 
 class YOLOChessDetector:
@@ -125,7 +125,7 @@ class YOLOChessDetector:
 
     def to_board(self, image: np.ndarray, board_rect: Tuple[int, int, int, int],
                  midline: int) -> List[List[str]]:
-        """将检测结果映射到 10x9 棋盘"""
+        """將检测结果映射到 10x9 棋盘"""
         detections = self.detect(image)
         board = [["."] * 9 for _ in range(10)]
         bx, by, bw, bh = board_rect

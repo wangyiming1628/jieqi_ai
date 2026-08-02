@@ -75,7 +75,7 @@ def main():
             if my_side is None:
                 for r in range(5, 10):
                     for c in range(9):
-                        if board[r][c] in ("r帅","r帥"):
+                        if board[r][c] == "r帥":
                             my_side = "r"; break
                     if my_side: break
                 if my_side is None: my_side = "b"

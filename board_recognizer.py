@@ -6,9 +6,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from yolo_detector import YOLOChessDetector
 from paddleocr import PaddleOCR
 
-CHESS = "帅帥仕相马馬車炮兵将士士象砲卒将將"
-RED_ONLY = set("帅帥仕相兵")
-BLACK_ONLY = set("将將士象卒砲")
+CHESS = "帥仕相馬車炮兵將士象卒"
+RED_ONLY = set("帥仕相兵")
+BLACK_ONLY = set("將士象卒")
 
 class BoardRecognizer:
     def __init__(self):
@@ -60,7 +60,7 @@ class BoardRecognizer:
         return None
 
     def detect(self, image: np.ndarray):
-        """返回 10x9 棋盘: '.'=空, 'r?'=暗红, 'b?'=暗黑, 'r帅'=红帅等"""
+        """返回 10x9 棋盘: '.'=空, 'r?'=暗红, 'b?'=暗黑, 'r帥'=红帥等"""
         h, w = image.shape[:2]
         mid_y = h / 2
         dets = self.detector.detect(image)
@@ -128,8 +128,8 @@ class BoardRecognizer:
         for r in range(5, 10):
             for c in range(9):
                 p = board[r][c]
-                if p in ("r帅", "r帥", "r将", "r將"): bottom_king = "r"; break
-                if p in ("b将", "b將", "b帅", "b帥"): bottom_king = "b"; break
+                if p == "r帥": bottom_king = "r"; break
+                if p == "b將": bottom_king = "b"; break
             if bottom_king: break
 
         for r in range(10):

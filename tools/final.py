@@ -2,7 +2,7 @@
 YOLO检测 + PaddleOCR原始概率 — 从6625类中取象棋字最高分
 """
 import os, cv2, sys, numpy as np
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from yolo_detector import YOLOChessDetector
 from paddleocr import PaddleOCR
 
@@ -41,7 +41,7 @@ rec = ocr.text_recognizer
 char_list = rec.postprocess_op.character
 max_wh = rec.rec_image_shape[2] / rec.rec_image_shape[1]
 
-CHESS = "帅帥仕相马馬车車炮兵将士士象砲卒将將"
+CHESS = "帅帥仕相马馬車炮兵将士士象砲卒将將"
 RED_ONLY = set("帅帥仕相兵")
 BLACK_ONLY = set("将將士象卒砲")
 
@@ -124,7 +124,7 @@ for d in dets:
     row = int(cy / img.shape[0] * 10)
     row, col = max(0, min(9, row)), max(0, min(8, col))
 
-    if ch and conf > 0.005:
+    if ch and conf > 0.3:
         side = detect_side(crop, ch)
         if side is None:
             side = "红" if cy < mid_y else "黑"

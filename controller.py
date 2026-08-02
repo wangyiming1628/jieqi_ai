@@ -1,6 +1,8 @@
 import sys
 import time
 import random
+import numpy as np
+import cv2
 from typing import Optional, Tuple
 
 if sys.platform == "win32":
@@ -55,16 +57,29 @@ if sys.platform == "win32":
             return (rect.left, rect.top, rect.right, rect.bottom)
         return None
 
-    def capture_window(hwnd: int) -> Optional[bytes]:
-        import mss
+    def capture_window(hwnd: int) -> Optional[np.ndarray]:
+        import ctypes
+        from ctypes import wintypes
         rect = get_window_rect(hwnd)
         if rect is None:
             return None
         left, top, right, bottom = rect
-        monitor = {"top": top, "left": left, "width": right - left, "height": bottom - top}
-        with mss.mss() as sct:
-            img = sct.grab(monitor)
-            return img
+        w, h = right - left, bottom - top
+        # Use PrintWindow for background capture
+        hwnd_dc = user32.GetWindowDC(hwnd)
+        mfc_dc = ctypes.windll.gdi32.CreateCompatibleDC(hwnd_dc)
+        bitmap = ctypes.windll.gdi32.CreateCompatibleBitmap(hwnd_dc, w, h)
+        ctypes.windll.gdi32.SelectObject(mfc_dc, bitmap)
+        PW_RENDERFULLCONTENT = 2
+        ctypes.windll.user32.PrintWindow(hwnd, mfc_dc, PW_RENDERFULLCONTENT)
+        buf = ctypes.create_string_buffer(w * h * 4)
+        ctypes.windll.gdi32.GetBitmapBits(bitmap, w * h * 4, buf)
+        img = np.frombuffer(buf, dtype=np.uint8).reshape(h, w, 4)
+        img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
+        ctypes.windll.gdi32.DeleteObject(bitmap)
+        ctypes.windll.gdi32.DeleteDC(mfc_dc)
+        user32.ReleaseDC(hwnd, hwnd_dc)
+        return img
 
 elif sys.platform == "darwin":
     import pyautogui
@@ -142,7 +157,7 @@ class Controller:
             return False
         return True
 
-    def capture(self) -> Optional[bytes]:
+    def capture(self) -> Optional[np.ndarray]:
         if sys.platform == "win32":
             return capture_window(self.hwnd)
         else:

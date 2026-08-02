@@ -1,23 +1,49 @@
 import random
+from dataclasses import dataclass
 from typing import List, Optional, Tuple, Set
-from board_detector import Cell, BOARD_ROWS, BOARD_COLS
+
+BOARD_ROWS = 10
+BOARD_COLS = 9
+
+
+@dataclass
+class Cell:
+    row: int
+    col: int
+    x: int
+    y: int
+    piece: str = "."
+
+    @property
+    def is_empty(self) -> bool:
+        return self.piece == "."
+
+    @property
+    def is_hidden(self) -> bool:
+        return self.piece.endswith("?")
+
+    @property
+    def side(self) -> str:
+        if self.is_empty:
+            return ""
+        return "r" if self.piece.startswith("r") else "b"
 
 
 KNOWN_PIECES = {
-    "r": ["帅", "仕", "相", "马", "车", "炮", "兵"],
-    "b": ["将", "士", "象", "马", "车", "砲", "卒"],
+    "r": ["帅", "仕", "相", "马", "車", "炮", "兵"],
+    "b": ["将", "士", "象", "马", "車", "砲", "卒"],
 }
 
 POSITION_PIECE_MAP = {
     "r": [
-        ["车","马","相","仕","帅","仕","相","马","车"],
+        ["車","马","相","仕","帅","仕","相","马","車"],
         [  "",  "",  "",  "",  "",  "",  "",  "",  ""],
         [  "","炮",  "",  "",  "",  "",  "","炮",  ""],
         ["兵",  "","兵",  "","兵",  "","兵",  "","兵"],
         [  "",  "",  "",  "",  "",  "",  "",  "",  ""],
     ],
     "b": [
-        ["车","马","象","士","将","士","象","马","车"],
+        ["車","马","象","士","将","士","象","马","車"],
         [  "",  "",  "",  "",  "",  "",  "",  "",  ""],
         [  "","砲",  "",  "",  "",  "",  "","砲",  ""],
         ["卒",  "","卒",  "","卒",  "","卒",  "","卒"],
@@ -26,10 +52,10 @@ POSITION_PIECE_MAP = {
 }
 
 INIT_BOARD_PIECES = {
-    (0,0):"r车",(0,1):"r马",(0,2):"r相",(0,3):"r仕",(0,4):"r帅",(0,5):"r仕",(0,6):"r相",(0,7):"r马",(0,8):"r车",
+    (0,0):"r車",(0,1):"r马",(0,2):"r相",(0,3):"r仕",(0,4):"r帅",(0,5):"r仕",(0,6):"r相",(0,7):"r马",(0,8):"r車",
     (2,1):"r炮",(2,7):"r炮",
     (3,0):"r兵",(3,2):"r兵",(3,4):"r兵",(3,6):"r兵",(3,8):"r兵",
-    (9,0):"b车",(9,1):"b马",(9,2):"b象",(9,3):"b士",(9,4):"b将",(9,5):"b士",(9,6):"b象",(9,7):"b马",(9,8):"b车",
+    (9,0):"b車",(9,1):"b马",(9,2):"b象",(9,3):"b士",(9,4):"b将",(9,5):"b士",(9,6):"b象",(9,7):"b马",(9,8):"b車",
     (7,1):"b砲",(7,7):"b砲",
     (6,0):"b卒",(6,2):"b卒",(6,4):"b卒",(6,6):"b卒",(6,8):"b卒",
 }
@@ -180,7 +206,7 @@ class GameState:
                 cands = self.hidden_candidates.get(key, KNOWN_PIECES[side])
                 available = []
                 for cand in cands:
-                    max_cnt = 2 if cand in ("车", "马", "炮", "砲") else \
+                    max_cnt = 2 if cand in ("車", "马", "炮", "砲") else \
                               5 if cand in ("兵", "卒") else \
                               2 if cand in ("仕", "士", "相", "象") else 1
                     if used[side].get(cand, 0) < max_cnt:
@@ -215,7 +241,7 @@ class GameState:
         if piece.endswith("?"):
             return piece
         mapping = {
-            "r帅": "K", "r仕": "A", "r相": "B", "r马": "N", "r车": "R", "r炮": "C", "r兵": "P",
-            "b将": "k", "b士": "a", "b象": "b", "b马": "n", "b车": "r", "b砲": "c", "b卒": "p",
+            "r帅": "K", "r仕": "A", "r相": "B", "r马": "N", "r車": "R", "r炮": "C", "r兵": "P",
+            "b将": "k", "b士": "a", "b象": "b", "b马": "n", "b車": "r", "b砲": "c", "b卒": "p",
         }
         return mapping.get(piece, piece)

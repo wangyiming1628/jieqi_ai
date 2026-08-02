@@ -9,8 +9,8 @@ from typing import List, Tuple, Optional
 
 # 7 种棋子类型
 PIECE_NAMES = ["K", "A", "B", "N", "R", "C", "P"]
-PIECE_CHINESE_RED = {"K": "帅", "A": "仕", "B": "相", "N": "马", "R": "车", "C": "炮", "P": "兵"}
-PIECE_CHINESE_BLACK = {"K": "将", "A": "士", "B": "象", "N": "马", "R": "车", "C": "砲", "P": "卒"}
+PIECE_CHINESE_RED = {"K": "帅", "A": "仕", "B": "相", "N": "马", "R": "車", "C": "炮", "P": "兵"}
+PIECE_CHINESE_BLACK = {"K": "将", "A": "士", "B": "象", "N": "马", "R": "車", "C": "砲", "P": "卒"}
 
 
 class YOLOChessDetector:

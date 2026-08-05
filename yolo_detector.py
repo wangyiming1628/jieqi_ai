@@ -68,8 +68,9 @@ class YOLOChessDetector:
         med_aspect = np.median(aspects)
         return [
             d for d in detections
-            if 0.3 * med_area < d["w"] * d["h"] < 3.0 * med_area
+            if 0.5 * med_area < d["w"] * d["h"] < 2.0 * med_area
             and 0.5 < d["w"] / max(d["h"], 1) < 2.0
+            and d["w"] > 40 and d["h"] > 40  # 绝对最小尺寸，过滤过小的误检
         ]
 
     def _nms(self, detections: List[dict]) -> List[dict]:

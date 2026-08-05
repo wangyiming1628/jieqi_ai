@@ -94,14 +94,14 @@ class ScreenCapture:
         )
         return CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly, kCGNullWindowID)
 
-    def capture(self, output_path: Optional[str] = None) -> Optional[np.ndarray]:
+    def _screencapture_raw(self) -> Optional[np.ndarray]:
+        """截取完整窗口截图"""
         if self.window_id is None:
             if not self.find_window():
                 return None
-        if output_path is None:
-            output_path = os.path.join(
-                os.path.dirname(os.path.abspath(__file__)), "snapshot", "_tmp_capture.png"
-            )
+        output_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "snapshot", "_tmp_capture.png"
+        )
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         try:
             subprocess.run(
@@ -110,7 +110,6 @@ class ScreenCapture:
                 timeout=5,
             )
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-            print(f"[!] 截屏失败: {e}")
             return None
         if not os.path.exists(output_path):
             return None
@@ -119,6 +118,10 @@ class ScreenCapture:
             os.remove(output_path)
         except OSError:
             pass
+        return img
+
+    def capture(self, output_path: Optional[str] = None) -> Optional[np.ndarray]:
+        img = self._screencapture_raw()
         if img is None:
             return None
         h, w = img.shape[:2]
@@ -132,6 +135,9 @@ class ScreenCapture:
         x2 = min(w, x1 + crop_w)
         y2 = min(h, y1 + crop_h)
         return img[y1:y2, x1:x2]
+
+    def capture_full(self) -> Optional[np.ndarray]:
+        return self._screencapture_raw()
 
     def capture_region(self, x: int, y: int, w: int, h: int) -> Optional[np.ndarray]:
         img = self.capture()
@@ -173,7 +179,6 @@ class BoardRecognizer:
         self.rec = self.ocr.text_recognizer
         self.char_list = self.rec.postprocess_op.character
         self.max_wh = self.rec.rec_image_shape[2] / self.rec.rec_image_shape[1]
-        self._cache = {}  # (col, row) -> (cx, cy, char, conf, side)
         self._capture = None  # macOS: ScreenCapture 实例
         if sys.platform == "darwin":
             self._capture = ScreenCapture(target_title="天天象棋", target_owner="微信")
@@ -224,27 +229,20 @@ class BoardRecognizer:
             return "b"
         return None
 
-    def detect(self, image: np.ndarray):
-        """返回 10x9 棋盘: '.'=空, 'r?'=暗红, 'b?'=暗黑, 'r帥'=红帥等"""
+    def detect(self, image: np.ndarray, my_side: str = None):
+        """返回 10x9 棋盘。my_side 用于暗棋阵营推断。"""
         h, w = image.shape[:2]
         mid_y = h / 2
         dets = self.detector.detect(image)
-        
+
         board = [["."] * 9 for _ in range(10)]
-        
+
         for i, d in enumerate(dets):
             cx, cy = d["x"], d["y"]
             col = int(cx / w * 9)
             row = int(cy / h * 10)
             row, col = max(0, min(9, row)), max(0, min(8, col))
-            key = (row, col)
 
-            # Check cache
-            if key in self._cache:
-                pcx, pcy, pch, pconf, pside, _ = self._cache[key]
-                if abs(cx - pcx) < 10 and abs(cy - pcy) < 10:
-                    board[row][col] = pside + pch if pch else pside + "?"
-                    continue
             x1 = max(0, int(cx - d["w"] / 2))
             y1 = max(0, int(cy - d["h"] / 2))
             x2 = min(w, int(cx + d["w"] / 2))
@@ -252,7 +250,6 @@ class BoardRecognizer:
             full = image[y1:y2, x1:x2]
             if full.size == 0: continue
 
-            # HoughCircles
             gray = cv2.cvtColor(full, cv2.COLOR_BGR2GRAY)
             blurred = cv2.medianBlur(gray, 5)
             circles = cv2.HoughCircles(blurred, cv2.HOUGH_GRADIENT, dp=1.0, minDist=80,
@@ -270,15 +267,11 @@ class BoardRecognizer:
             crop = image[cy2:cy3, cx2:cx3]
 
             ch, conf = self._raw_ocr(crop)
-
-            # Check if piece is face-down (uniform texture -> low std)
-            gray_crop = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY) if crop.size > 0 else None
-            # Check if piece is face-down: uniform -> low std on ORIGINAL YOLO crop
             full_gray = cv2.cvtColor(full, cv2.COLOR_BGR2GRAY)
             is_hidden = np.std(full_gray) < 40
 
             side = "r" if cy < mid_y else "b"
-            if ch and conf > 0.005 and not is_hidden:
+            if ch and conf > 0.001 and not is_hidden:
                 detected = self._detect_side(crop, ch)
                 if detected:
                     side = detected
@@ -286,27 +279,13 @@ class BoardRecognizer:
             else:
                 board[row][col] = "?"
 
-            self._cache[key] = (cx, cy, ch, conf, side, board[row][col])
-
-        # Determine hidden piece sides from king position
-        bottom_king = ""
-        for r in range(5, 10):
-            for c in range(9):
-                p = board[r][c]
-                if p == "r帥": bottom_king = "r"; break
-                if p == "b將": bottom_king = "b"; break
-            if bottom_king: break
-
-        for r in range(10):
-            for c in range(9):
-                if board[r][c] == "?":
-                    side = bottom_king if r >= 5 else ("r" if bottom_king == "b" else "b")
-                    if not side: side = "b"
-                    board[r][c] = side + "?"
-
-        king_row = next((r for r in range(5,10) for c in range(9) if board[r][c] not in (".","?","b?","r?") and board[r][c][0] in "rb"), -1)
-        if king_row >= 0:
-            player_side = "r" if king_row >= 5 else "b"
+        # 暗棋阵营：下方(row>=5)是己方半场，上方(row<5)是对方半场
+        if my_side is not None:
+            opp = "b" if my_side == "r" else "r"
+            for r in range(10):
+                for c in range(9):
+                    if board[r][c] == "?":
+                        board[r][c] = (my_side if r >= 5 else opp) + "?"
 
         return board
 

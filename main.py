@@ -208,6 +208,12 @@ def execute_move(uci, recognizer, my_side):
     pyautogui.click(tx, ty); time.sleep(0.3)
     print(f"[+] 已走子")
 
+    # 6. 切回 Terminal，确保下次能检测到状态框
+    subprocess.run([
+        "osascript", "-e",
+        'tell application "Terminal" to activate'
+    ], timeout=3)
+
 
 def main():
     print("[*] 揭棋 AI v2.0 启动中...")

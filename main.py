@@ -63,13 +63,17 @@ def board_to_fen(board, my_side):
         for c in range(9):
             if rc > 16 and board[r][c] == "r?": board[r][c] = "."; rc -= 1
             if bc > 16 and board[r][c] == "b?": board[r][c] = "."; bc -= 1
-    # 引擎内部：FEN 第一段 → 引擎 rank 9，FEN 最后一段 → 引擎 rank 0
-    # 引擎 row 0-4 = 红方半场，row 5-9 = 黑方半场
-    # 需要：红方棋子 → 引擎 rank 0-4，黑方棋子 → 引擎 rank 5-9
-    # 判断红方在 board 的上半还是下半来决定 FEN 方向
-    red_in_bottom = any(board[r][c].startswith("r") for r in range(5, 10) for c in range(9))
+    # 天天象棋：己方永远在 board 下半 (row 5-9)
+    # 引擎：rank 0-4=红方半场, rank 5-9=黑方半场（固定）
+    # FEN 段0=引擎rank9, 段9=引擎rank0（第一段=棋盘最上方）
+    # 需要：红方棋子→rank 0-4(FEN段5-9), 黑方棋子→rank 5-9(FEN段0-4)
+    # my_side=="r": 己方(红)在row 5-9 → FEN段5-9(rank 0-4) → 正序
+    # my_side=="b": 己方(黑)在row 5-9 → FEN段0-4(rank 5-9) → 倒序
+    if my_side == "r":
+        row_range = range(10)  # 正序：row0→段0(rank9黑方半场), row9→段9(rank0红方半场)
+    else:
+        row_range = range(9, -1, -1)  # 倒序：row9→段0(rank9黑方半场), row0→段9(rank0红方半场)
     rows = []
-    row_range = range(10) if red_in_bottom else range(9, -1, -1)
     for r in row_range:
         s = ""; e = 0
         for c in range(9):
@@ -89,9 +93,8 @@ def uci_to_human(uci, board, my_side):
     if len(u) < 4 or not u[1].isdigit() or not u[3].isdigit(): return uci
     fc, engine_fr = ord(u[0]) - 97, int(u[1])
     tc, engine_tr = ord(u[2]) - 97, int(u[3])
-    # 引擎 rank → board row：取决于红方在 board 的上半还是下半
-    # my_side == "r" 时红方在下半（正序FEN）：board_row = 9 - engine_rank
-    # my_side == "b" 时红方在上半（倒序FEN）：board_row = engine_rank
+    # my_side=="r": FEN正序 → board_row = 9 - engine_rank
+    # my_side=="b": FEN倒序 → board_row = engine_rank
     if my_side == "r":
         fr, tr = 9 - engine_fr, 9 - engine_tr
     else:
@@ -112,25 +115,6 @@ def uci_to_human(uci, board, my_side):
     return f"{pre}{pn}{COL_NAMES[fc]}{act}{pos}"
 
 
-TITLEBAR_OFFSET = 68  # macOS 标题栏在 Retina 2x 下的高度（逻辑 34pt）
-
-
-def _get_window_position():
-    """AppleScript 获取微信/天天象棋窗口的 position（逻辑坐标，包含标题栏）"""
-    try:
-        r = subprocess.run([
-            "osascript", "-e",
-            'tell application "System Events" to get position of '
-            'first window of process "微信" whose name is "天天象棋"'
-        ], capture_output=True, text=True, timeout=3)
-        parts = r.stdout.strip().split(",")
-        if len(parts) == 2:
-            return int(parts[0].strip()), int(parts[1].strip())
-    except Exception:
-        pass
-    return None
-
-
 def _activate_window():
     """AppleScript 激活微信到前台"""
     try:
@@ -142,20 +126,18 @@ def _activate_window():
         pass
 
 
-def board_pos_to_screen(row, col, win_img_w, win_img_h, win_pos):
-    """窗口内容图坐标 → 屏幕绝对逻辑坐标
-    win_img: 窗口内容截图（Retina 2x）
-    win_pos: (x, y) 窗口 position（逻辑坐标，包含标题栏）
-    棋盘在窗口内容图中居中
+def board_pos_to_screen(row, col, win_img, win_img_w, win_img_h):
+    """棋盘 (row, col) → 屏幕绝对逻辑坐标
+    win_img: 全屏截图（Retina 2x），直接像素÷2=逻辑坐标
+    棋盘 = 全屏截图居中 1529x1695 区域，按 10x9 网格划分
     """
-    win_x, win_y = win_pos
     ox = (win_img_w - CROP_W) // 2
     oy = (win_img_h - CROP_H) // 2
     cw, ch = CROP_W / 9, CROP_H / 10
-    wx = ox + col * cw + cw / 2
-    wy = oy + row * ch + ch / 2
-    # Retina 2x → 逻辑坐标：除以 2
-    return ((win_x * 2 + int(wx)) // 2, (win_y * 2 + TITLEBAR_OFFSET + int(wy)) // 2)
+    # 像素坐标（Retina 2x），÷2 转屏幕逻辑坐标
+    px = int((ox + col * cw + cw / 2) / 2)
+    py = int((oy + row * ch + ch / 2) / 2)
+    return (px, py)
 
 
 def execute_move(uci, recognizer, my_side):
@@ -164,33 +146,62 @@ def execute_move(uci, recognizer, my_side):
         print(f"[!] 无效着法: {uci}"); return
     fc, engine_fr = ord(u[0]) - 97, int(u[1])
     tc, engine_tr = ord(u[2]) - 97, int(u[3])
-    # 引擎 rank → board row
+    # my_side=="r": FEN正序 → board_row = 9 - engine_rank
+    # my_side=="b": FEN倒序 → board_row = engine_rank
     if my_side == "r":
         fr, tr = 9 - engine_fr, 9 - engine_tr
     else:
         fr, tr = engine_fr, engine_tr
 
-    # 1. 获取窗口位置（逻辑坐标）
-    win_pos = _get_window_position()
-    if win_pos is None:
-        print("[!] 获取窗口位置失败"); return
-    print(f"[*] 窗口 position: {win_pos}")
-
-    # 2. 激活窗口到前台
+    # 1. 激活窗口到前台
     _activate_window()
     time.sleep(0.3)
 
-    # 3. 截窗口内容图（Retina 2x）
-    win_img = recognizer._capture._screencapture_raw()
-    if win_img is None:
-        print("[!] 窗口截图失败"); return
+    # 2. 全屏截图（Retina 2x），直接像素÷2=屏幕逻辑坐标，无需 win_pos
+    import pyautogui as pag
+    ss = pag.screenshot()
+    win_img = cv2.cvtColor(np.array(ss), cv2.COLOR_RGB2BGR)
     h, w = win_img.shape[:2]
-    print(f"[*] 窗口截图: {w}x{h}")
+    print(f"[*] 全屏截图: {w}x{h}")
 
-    # 4. 计算屏幕坐标
-    fx, fy = board_pos_to_screen(fr, fc, w, h, win_pos)
-    tx, ty = board_pos_to_screen(tr, tc, w, h, win_pos)
+    # 3. 计算屏幕坐标
+    fx, fy = board_pos_to_screen(fr, fc, win_img, w, h)
+    tx, ty = board_pos_to_screen(tr, tc, win_img, w, h)
     print(f"[*] 走子: ({fr},{fc})→({tr},{tc}) 屏幕: ({fx},{fy})→({tx},{ty})")
+
+    # 4.5 保存调试截图：在截图上画出所有格子中心和走子标记
+    debug_img = win_img.copy()
+    ox = (w - CROP_W) // 2
+    oy = (h - CROP_H) // 2
+    cw, ch = CROP_W / 9, CROP_H / 10
+    # 画 10x9 网格中心点
+    for rr in range(10):
+        for cc in range(9):
+            px = int(ox + cc * cw + cw / 2)
+            py = int(oy + rr * ch + ch / 2)
+            color = (0, 255, 0)  # 绿点
+            if rr == fr and cc == fc:
+                color = (0, 0, 255)  # 起点红点
+            elif rr == tr and cc == tc:
+                color = (255, 0, 0)  # 终点蓝点
+            cv2.circle(debug_img, (px, py), 5, color, -1)
+    # 画箭头从起点到终点
+    fx_px = int(ox + fc * cw + cw / 2)
+    fy_px = int(oy + fr * ch + ch / 2)
+    tx_px = int(ox + tc * cw + cw / 2)
+    ty_px = int(oy + tr * ch + ch / 2)
+    cv2.arrowedLine(debug_img, (fx_px, fy_px), (tx_px, ty_px), (0, 255, 255), 3)
+    # 画截图中心点
+    cv2.circle(debug_img, (w // 2, h // 2), 10, (0, 165, 255), -1)  # 橙色大圆
+    cv2.putText(debug_img, f"center({w//2},{h//2})", (w // 2 + 15, h // 2 + 5),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 165, 255), 2)
+    # 画棋盘裁剪区域
+    cv2.rectangle(debug_img, (ox, oy), (ox + CROP_W, oy + CROP_H), (255, 255, 0), 2)
+    sd = os.path.join(os.path.dirname(os.path.abspath(__file__)), "snapshot")
+    os.makedirs(sd, exist_ok=True)
+    dbg_path = os.path.join(sd, f"debug_move_{time.strftime('%H%M%S')}.png")
+    cv2.imencode(".png", debug_img)[1].tofile(dbg_path)
+    print(f"[*] 调试截图已保存: {dbg_path}")
 
     # 5. 走子
     pyautogui.click(fx, fy); time.sleep(0.5)

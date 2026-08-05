@@ -28,7 +28,7 @@ class YOLOChessDetector:
         )
         self.input_size = 640
         self.clf_size = 64
-        self.conf_threshold = 0.3
+        self.conf_threshold = 0.5
         self.iou_threshold = 0.5
 
     def detect(self, image: np.ndarray) -> List[dict]:

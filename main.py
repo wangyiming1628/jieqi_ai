@@ -5,7 +5,7 @@ import sys, os, time, subprocess, json, cv2, numpy as np
 import pyautogui
 from board_recognizer import BoardRecognizer
 
-SCAN_INTERVAL = 1.0
+SCAN_INTERVAL = 0.3
 MY_BOX_X1, MY_BOX_Y1 = 2708, 1461
 MY_BOX_X2, MY_BOX_Y2 = 2867, 1617
 CROP_W, CROP_H = (1529, 1695) if sys.platform == "darwin" else (1035, 1143)
@@ -237,11 +237,11 @@ def execute_move(uci, recognizer, my_side):
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 165, 255), 2)
     # 画棋盘裁剪区域
     cv2.rectangle(debug_img, (ox, oy), (ox + CROP_W, oy + CROP_H), (255, 255, 0), 2)
-    sd = os.path.join(os.path.dirname(os.path.abspath(__file__)), "snapshot")
-    os.makedirs(sd, exist_ok=True)
-    dbg_path = os.path.join(sd, f"debug_move_{time.strftime('%H%M%S')}.png")
-    cv2.imencode(".png", debug_img)[1].tofile(dbg_path)
-    print(f"[*] 调试截图已保存: {dbg_path}")
+    # sd = os.path.join(os.path.dirname(os.path.abspath(__file__)), "snapshot")
+    # os.makedirs(sd, exist_ok=True)
+    # dbg_path = os.path.join(sd, f"debug_move_{time.strftime('%H%M%S')}.png")
+    # cv2.imencode(".png", debug_img)[1].tofile(dbg_path)
+    # print(f"[*] 调试截图已保存: {dbg_path}")
 
     # 5. 走子
     pyautogui.click(fx, fy); time.sleep(0.5)
@@ -282,9 +282,9 @@ def main():
                 if full_img is None: continue
                 board_img = crop_board(full_img)
 
-                sd = os.path.join(os.path.dirname(os.path.abspath(__file__)), "snapshot")
-                os.makedirs(sd, exist_ok=True)
-                cv2.imencode(".png", board_img)[1].tofile(os.path.join(sd, f"{time.strftime('%H%M%S')}.png"))
+                # sd = os.path.join(os.path.dirname(os.path.abspath(__file__)), "snapshot")
+                # os.makedirs(sd, exist_ok=True)
+                # cv2.imencode(".png", board_img)[1].tofile(os.path.join(sd, f"{time.strftime('%H%M%S')}.png"))
 
                 # 先识别（无side），用于判断阵营
                 board = recognizer.detect(board_img, my_side=None)

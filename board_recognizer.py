@@ -237,11 +237,19 @@ class BoardRecognizer:
 
         board = [["."] * 9 for _ in range(10)]
 
-        for i, d in enumerate(dets):
+        # 同格去重：多个检测框映射到同一格子时，只保留置信度最高的
+        cell_best = {}
+        for d in dets:
             cx, cy = d["x"], d["y"]
             col = int(cx / w * 9)
             row = int(cy / h * 10)
             row, col = max(0, min(9, row)), max(0, min(8, col))
+            key = (row, col)
+            if key not in cell_best or d["conf"] > cell_best[key]["conf"]:
+                cell_best[key] = d
+
+        for (row, col), d in cell_best.items():
+            cx, cy = d["x"], d["y"]
 
             x1 = max(0, int(cx - d["w"] / 2))
             y1 = max(0, int(cy - d["h"] / 2))
@@ -270,7 +278,7 @@ class BoardRecognizer:
             full_gray = cv2.cvtColor(full, cv2.COLOR_BGR2GRAY)
             is_hidden = np.std(full_gray) < 40
 
-            if ch and conf > 0.001 and not is_hidden:
+            if ch and conf > 0.001:
                 detected = self._detect_side(crop, ch)
                 if detected:
                     side = detected
@@ -301,6 +309,46 @@ class BoardRecognizer:
                     elif my_side is not None:
                         opp = "b" if my_side == "r" else "r"
                         board[r][c] = (my_side if r >= 5 else opp) + "?"
+
+        # 暗子位置合法性校验：引擎只允许暗子出现在标准开局棋子所在行和列
+        # 根据实际阵营朝向动态构建校验表（红方可能在棋盘上方 row0-4 或下方 row5-9）
+        _HIDDEN_VALID = {}
+        if red_half == "top":
+            # 红方在 row0-4（上方），黑方在 row5-9（下方）
+            _HIDDEN_VALID = {
+                ("r", 0): set(range(9)),
+                ("r", 2): {1, 7},
+                ("r", 3): {0, 2, 4, 6, 8},
+                ("b", 9): set(range(9)),
+                ("b", 7): {1, 7},
+                ("b", 6): {0, 2, 4, 6, 8},
+            }
+        elif red_half == "bottom":
+            # 红方在 row5-9（下方），黑方在 row0-4（上方）
+            _HIDDEN_VALID = {
+                ("r", 9): set(range(9)),
+                ("r", 7): {1, 7},
+                ("r", 6): {0, 2, 4, 6, 8},
+                ("b", 0): set(range(9)),
+                ("b", 2): {1, 7},
+                ("b", 3): {0, 2, 4, 6, 8},
+            }
+        else:
+            # 无法确定阵营朝向时：两边都允许（保守策略，避免误删合法暗子）
+            _HIDDEN_VALID = {
+                ("r", 0): set(range(9)), ("r", 2): {1, 7}, ("r", 3): {0, 2, 4, 6, 8},
+                ("r", 9): set(range(9)), ("r", 7): {1, 7}, ("r", 6): {0, 2, 4, 6, 8},
+                ("b", 0): set(range(9)), ("b", 2): {1, 7}, ("b", 3): {0, 2, 4, 6, 8},
+                ("b", 9): set(range(9)), ("b", 7): {1, 7}, ("b", 6): {0, 2, 4, 6, 8},
+            }
+        for r in range(10):
+            for c in range(9):
+                p = board[r][c]
+                if len(p) == 2 and p[1] == "?":
+                    side = p[0]
+                    valid_cols = _HIDDEN_VALID.get((side, r))
+                    if valid_cols is None or c not in valid_cols:
+                        board[r][c] = "."
 
         return board
 

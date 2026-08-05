@@ -270,21 +270,36 @@ class BoardRecognizer:
             full_gray = cv2.cvtColor(full, cv2.COLOR_BGR2GRAY)
             is_hidden = np.std(full_gray) < 40
 
-            side = "r" if cy < mid_y else "b"
             if ch and conf > 0.001 and not is_hidden:
                 detected = self._detect_side(crop, ch)
                 if detected:
                     side = detected
+                else:
+                    side = "?"  # 不确定阵营，后面统一修正
                 board[row][col] = side + ch
             else:
                 board[row][col] = "?"
 
-        # 暗棋阵营：下方(row>=5)是己方半场，上方(row<5)是对方半场
-        if my_side is not None:
-            opp = "b" if my_side == "r" else "r"
-            for r in range(10):
-                for c in range(9):
-                    if board[r][c] == "?":
+        # 根据帥/將位置确定阵营：找到红帥和黑將所在半场
+        red_half = None  # "top" (row 0-4) 或 "bottom" (row 5-9)
+        for r in range(10):
+            for c in range(9):
+                if board[r][c] == "r帥":
+                    red_half = "top" if r < 5 else "bottom"
+                elif board[r][c] == "b將":
+                    # 黑將所在半场 = 黑方，另一半 = 红方
+                    red_half = "bottom" if r < 5 else "top"
+
+        # 修正所有暗子阵营
+        for r in range(10):
+            for c in range(9):
+                p = board[r][c]
+                if p == "?" or (len(p) == 2 and p[1] == "?"):
+                    if red_half is not None:
+                        is_red_half = (r < 5 and red_half == "top") or (r >= 5 and red_half == "bottom")
+                        board[r][c] = ("r" if is_red_half else "b") + "?"
+                    elif my_side is not None:
+                        opp = "b" if my_side == "r" else "r"
                         board[r][c] = (my_side if r >= 5 else opp) + "?"
 
         return board

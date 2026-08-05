@@ -15,6 +15,36 @@ PIECE_NAME = {
     "b將": "將", "b士": "士", "b象": "象", "b馬": "馬", "b車": "車", "b炮": "炮", "b卒": "卒",
     "r?": "?", "b?": "?",
 }
+# 标准开局每个位置对应的棋子名（己方视角，己方在 row 5-9）
+# 红方标准布局：row9底线(車馬相仕帥仕相馬車), row7炮位, row6兵位
+# 黑方标准布局：row0底线(車馬象士將士象馬車), row2炮位, row3卒位
+_STD_RED = {
+    9: ["車", "馬", "相", "仕", "帥", "仕", "相", "馬", "車"],
+    7: {1: "炮", 7: "炮"},
+    6: {0: "兵", 2: "兵", 4: "兵", 6: "兵", 8: "兵"},
+}
+_STD_BLACK = {
+    0: ["車", "馬", "象", "士", "將", "士", "象", "馬", "車"],
+    2: {1: "炮", 7: "炮"},
+    3: {0: "卒", 2: "卒", 4: "卒", 6: "卒", 8: "卒"},
+}
+
+def _get_hidden_name(row, col, my_side):
+    """根据棋盘位置获取暗子的标准棋子名"""
+    if row in (5, 6, 7, 8, 9):  # 己方半场
+        std = _STD_RED if my_side == "r" else _STD_BLACK
+        # 映射己方 row 到标准布局 row（己方底线=9）
+        std_row = row
+    else:  # 对方半场
+        std = _STD_BLACK if my_side == "r" else _STD_RED
+        std_row = row
+    if std_row in std:
+        pos_map = std[std_row]
+        if isinstance(pos_map, dict):
+            return pos_map.get(col, "?")
+        elif isinstance(pos_map, list) and col < len(pos_map):
+            return pos_map[col]
+    return "?"
 RED_ROW_NAMES = ["一", "二", "三", "四", "五", "六", "七", "八", "九", "十"]
 BLACK_ROW_NAMES = ["十", "九", "八", "七", "六", "五", "四", "三", "二", "一"]
 COL_NAMES = ["九", "八", "七", "六", "五", "四", "三", "二", "一"]
@@ -100,8 +130,11 @@ def uci_to_human(uci, board, my_side):
     else:
         fr, tr = engine_fr, engine_tr
     piece = board[fr][fc]
-    pn = PIECE_NAME.get(piece, "?")
     is_hidden = piece.endswith("?")
+    if is_hidden:
+        pn = _get_hidden_name(fr, fc, my_side)
+    else:
+        pn = PIECE_NAME.get(piece, "?")
     rn = RED_ROW_NAMES if my_side == "r" else BLACK_ROW_NAMES
     steps = abs(fr - tr)
     step_names = ["", "一", "二", "三", "四", "五", "六", "七", "八", "九"]

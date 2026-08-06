@@ -179,6 +179,10 @@ class BoardRecognizer:
         self.rec = self.ocr.text_recognizer
         self.char_list = self.rec.postprocess_op.character
         self.max_wh = self.rec.rec_image_shape[2] / self.rec.rec_image_shape[1]
+        # 优化1：预计算棋子字在字典中的索引，解码时向量化取值，
+        # 避免每次对 6000+ 长度的 char_list 做 list.index() 线性查找
+        self._chess_chars = list(CHESS)
+        self._chess_idx = np.array([self.char_list.index(c) for c in self._chess_chars])
         self._capture = None  # macOS: ScreenCapture 实例
         if sys.platform == "darwin":
             self._capture = ScreenCapture(target_title="天天象棋", target_owner="微信")
@@ -189,26 +193,35 @@ class BoardRecognizer:
             return self._capture.capture()
         return None
 
-    def _raw_ocr(self, crop_bgr):
-        rgb = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2RGB)
-        norm = self.rec.resize_norm_img(rgb, self.max_wh)
-        norm_batch = np.expand_dims(norm, 0).copy()
+    def _raw_ocr_batch(self, crops_bgr):
+        """优化2：批量推理。一次前向处理多张棋子图，摊薄固定调用开销。
+        优化1：向量化解码，只在预计算的棋子字索引上取 argmax。
+        返回 [(char, prob), ...]，顺序与输入对齐。"""
+        if not crops_bgr:
+            return []
+        # 统一 resize/pad 到相同尺寸后堆叠成一个 batch
+        norms = []
+        for crop in crops_bgr:
+            rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+            norms.append(self.rec.resize_norm_img(rgb, self.max_wh))
+        norm_batch = np.stack(norms, axis=0).copy()
+
         input_names = self.rec.predictor.get_input_names()
         handle = self.rec.predictor.get_input_handle(input_names[0])
         handle.copy_from_cpu(norm_batch)
         self.rec.predictor.run()
         output_handles = [self.rec.predictor.get_output_handle(n) for n in self.rec.predictor.get_output_names()]
-        probs = np.array(output_handles[0].copy_to_cpu())
-        best_ch, best_p = "", 0.0
-        for pos in range(probs.shape[1]):
-            for ch in CHESS:
-                idx = self.char_list.index(ch) if ch in self.char_list else -1
-                if idx >= 0:
-                    p = probs[0, pos, idx]
-                    if p > best_p:
-                        best_p = p
-                        best_ch = ch
-        return best_ch, best_p
+        probs = np.array(output_handles[0].copy_to_cpu())  # (N, pos, vocab)
+
+        # 只在棋子字对应的列上取值 → (N, pos, len(CHESS))
+        sub = probs[:, :, self._chess_idx]
+        results = []
+        for i in range(sub.shape[0]):
+            si = sub[i]  # (pos, len(CHESS))
+            flat = int(si.argmax())
+            char_j = flat % len(self._chess_chars)
+            results.append((self._chess_chars[char_j], float(si.flat[flat])))
+        return results
 
     def _detect_side(self, crop_img, ocr_char):
         if ocr_char in RED_ONLY:
@@ -248,6 +261,9 @@ class BoardRecognizer:
             if key not in cell_best or d["conf"] > cell_best[key]["conf"]:
                 cell_best[key] = d
 
+        # 第一遍：收集每格的裁剪图与元数据（不逐个推理）
+        cells = []  # [(row, col, crop, is_hidden), ...]
+        crops = []
         for (row, col), d in cell_best.items():
             cx, cy = d["x"], d["y"]
 
@@ -273,11 +289,17 @@ class BoardRecognizer:
             cx3 = min(w, int(x1 + pcx + S // 2))
             cy3 = min(h, int(y1 + pcy + S // 2))
             crop = image[cy2:cy3, cx2:cx3]
+            if crop.size == 0: continue
 
-            ch, conf = self._raw_ocr(crop)
-            full_gray = cv2.cvtColor(full, cv2.COLOR_BGR2GRAY)
-            is_hidden = np.std(full_gray) < 40
+            is_hidden = np.std(gray) < 40
+            cells.append((row, col, crop, is_hidden))
+            crops.append(crop)
 
+        # 优化2：一次批量推理所有棋子（替代逐格串行调用）
+        ocr_results = self._raw_ocr_batch(crops)
+
+        # 第二遍：用批量结果填表
+        for (row, col, crop, is_hidden), (ch, conf) in zip(cells, ocr_results):
             if ch and conf > 0.001:
                 detected = self._detect_side(crop, ch)
                 if detected:

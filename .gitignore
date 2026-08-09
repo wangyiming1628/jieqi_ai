@@ -4,3 +4,7 @@ snapshot/
 venv/
 tools/
 .codebuddy/
+# 引擎二进制 (揭棋纯算法引擎无需这些)
+engines/PikaJieQi
+engines/PikaJieQi-avx2.exe
+engines/PikaJieQi-modern.exe

@@ -1,7 +1,7 @@
 """
 揭棋 AI 主程序 - 状态框检测 + 引擎 + 自动走子
 """
-import sys, os, time, subprocess, json, cv2, numpy as np, threading, queue, re
+import sys, os, time, subprocess, cv2, numpy as np, re
 import pyautogui
 from board_recognizer import BoardRecognizer
 
@@ -56,13 +56,6 @@ RED_ROW_NAMES = ["一", "二", "三", "四", "五", "六", "七", "八", "九", 
 BLACK_ROW_NAMES = ["十", "九", "八", "七", "六", "五", "四", "三", "二", "一"]
 COL_NAMES = ["九", "八", "七", "六", "五", "四", "三", "二", "一"]
 
-FEN_MAP = {
-    "r帥": "K", "r仕": "A", "r相": "E", "r馬": "H", "r車": "R", "r炮": "C", "r兵": "P",
-    "b將": "k", "b士": "a", "b象": "e", "b馬": "h", "b車": "r", "b炮": "c", "b卒": "p",
-    "r?": "X", "b?": "x",
-}
-
-
 def get_box_border_color(img, x1, y1, x2, y2, bw=4):
     h, w = img.shape[:2]
     x1, y1 = max(0, x1), max(0, y1)
@@ -90,38 +83,6 @@ def crop_board(img):
     h, w = img.shape[:2]
     cx, cy = w // 2, h // 2
     return img[cy - CROP_H // 2:cy + CROP_H // 2, cx - CROP_W // 2:cx + CROP_W // 2]
-
-
-def board_to_fen(board, my_side):
-    # 每方棋子不能超过16个
-    rc = sum(1 for r in range(10) for c in range(9) if board[r][c].startswith("r"))
-    bc = sum(1 for r in range(10) for c in range(9) if board[r][c].startswith("b"))
-    for r in range(10):
-        for c in range(9):
-            if rc > 16 and board[r][c] == "r?": board[r][c] = "."; rc -= 1
-            if bc > 16 and board[r][c] == "b?": board[r][c] = "."; bc -= 1
-    # 天天象棋：己方永远在 board 下半 (row 5-9)
-    # 引擎：rank 0-4=红方半场, rank 5-9=黑方半场（固定）
-    # FEN 段0=引擎rank9, 段9=引擎rank0（第一段=棋盘最上方）
-    # 需要：红方棋子→rank 0-4(FEN段5-9), 黑方棋子→rank 5-9(FEN段0-4)
-    # my_side=="r": 己方(红)在row 5-9 → FEN段5-9(rank 0-4) → 正序
-    # my_side=="b": 己方(黑)在row 5-9 → FEN段0-4(rank 5-9) → 倒序
-    if my_side == "r":
-        row_range = range(10)  # 正序：row0→段0(rank9黑方半场), row9→段9(rank0红方半场)
-    else:
-        row_range = range(9, -1, -1)  # 倒序：row9→段0(rank9黑方半场), row0→段9(rank0红方半场)
-    rows = []
-    for r in row_range:
-        s = ""; e = 0
-        for c in range(9):
-            p = board[r][c]
-            if p == ".": e += 1
-            else:
-                if e: s += str(e); e = 0
-                s += FEN_MAP.get(p, p)
-        if e: s += str(e)
-        rows.append(s)
-    return "/".join(rows) + f" -:- {my_side} {my_side}"
 
 
 def uci_to_human(uci, board, my_side):
@@ -154,171 +115,6 @@ def uci_to_human(uci, board, my_side):
     pre = "[揭]" if is_reveal else ("[暗]" if is_hidden else "")
     return f"{pre}{pn}{COL_NAMES[fc]}{act}{pos}"
 
-
-FEN_MAP = {
-    "r帥": "K", "r仕": "A", "r相": "E", "r馬": "H", "r車": "R", "r炮": "C", "r兵": "P",
-    "b將": "k", "b士": "a", "b象": "e", "b馬": "h", "b車": "r", "b炮": "c", "b卒": "p",
-    "r?": "X", "b?": "x",
-}
-# PikaJieQi 使用标准 UCI 棋子字母: B=相, N=馬
-PIKAJIEQI_FEN_MAP = {
-    "r帥": "K", "r仕": "A", "r相": "B", "r馬": "N", "r車": "R", "r炮": "C", "r兵": "P",
-    "b將": "k", "b士": "a", "b象": "b", "b馬": "n", "b車": "r", "b炮": "c", "b卒": "p",
-    "r?": "X", "b?": "x",
-}
-PIECE_MAP = {
-    "r帥": "R", "r仕": "A", "r相": "B", "r馬": "N", "r車": "R", "r炮": "C", "r兵": "P",
-    "b將": "k", "b士": "a", "b象": "b", "b馬": "n", "b車": "r", "b炮": "c", "b卒": "p",
-}
-PIECE_COUNTS = {
-    "r": {"R": 2, "A": 2, "B": 2, "N": 2, "C": 2, "P": 5},
-    "b": {"r": 2, "a": 2, "b": 2, "n": 2, "c": 2, "p": 5},
-}
-
-def board_to_pikajieqi_fen(board, my_side):
-    # 使用 PikaJieQi 的标准 UCI 棋子字母 (B=相/象, N=馬)
-    rc = sum(1 for r in range(10) for c in range(9) if board[r][c].startswith("r"))
-    bc = sum(1 for r in range(10) for c in range(9) if board[r][c].startswith("b"))
-    for r in range(10):
-        for c in range(9):
-            if rc > 16 and board[r][c] == "r?": board[r][c] = "."; rc -= 1
-            if bc > 16 and board[r][c] == "b?": board[r][c] = "."; bc -= 1
-    if my_side == "r":
-        row_range = range(10)
-    else:
-        row_range = range(9, -1, -1)
-    rows = []
-    for r in row_range:
-        s = ""; e = 0
-        for c in range(9):
-            p = board[r][c]
-            if p == ".": e += 1
-            else:
-                if e: s += str(e); e = 0
-                s += PIKAJIEQI_FEN_MAP.get(p, p)
-        if e: s += str(e)
-        rows.append(s)
-    placement = "/".join(rows)
-    side_char = "w" if my_side == "r" else "b"
-    # 统计已翻开的各类型棋子数量
-    revealed = {}
-    for r in range(10):
-        for c in range(9):
-            k = PIECE_MAP.get(board[r][c])
-            if k:
-                revealed[k] = revealed.get(k, 0) + 1
-    # 剩余暗子数 = 总数 - 已翻开
-    rest_parts = []
-    for color_key in ["r", "b"]:
-        counts = PIECE_COUNTS[color_key]
-        for key, total in counts.items():
-            revealed_count = revealed.get(key, 0)
-            if total >= revealed_count:
-                rest_parts.append(f"{key}{total - revealed_count}")
-            else:
-                rest_parts.append(f"{key}0")
-    return f"{placement} {side_char} {' '.join(rest_parts)} 0 1"
-
-class PikaJieQiEngine:
-    def __init__(self, engine_path, nnue_path=None, threads=1, hash_mb=64, use_wine=False):
-        self.engine_path = engine_path
-        self.nnue_path = nnue_path or os.path.join(os.path.dirname(engine_path), "pikafish.nnue")
-        self.threads = threads
-        self.hash_mb = hash_mb
-        self.use_wine = use_wine
-        self._proc = None
-        self._q = queue.Queue()
-
-    def _reader(self):
-        for line in iter(self._proc.stdout.readline, ""):
-            s = line.strip()
-            if not s:
-                continue
-            # 过滤 Wine/MoltenVK/Vulkan 启动信息
-            if s.startswith("[mvk-") or s.startswith("[wine-") or s.startswith("Vulkan"):
-                continue
-            if "VK_" in s and "supported" in s:
-                continue
-            if s.startswith("GPU ") or s.startswith("pipelineCache"):
-                continue
-            if s.startswith("Metal ") or "memory used" in s.lower():
-                continue
-            self._q.put(s)
-
-    def _start(self):
-        if self._proc is not None:
-            return
-        cmd = ["wine", self.engine_path] if self.use_wine else [self.engine_path]
-        self._proc = subprocess.Popen(
-            cmd,
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            encoding="utf-8", errors="ignore", bufsize=1,
-            env={**os.environ, "WINEDEBUG": "-all"},
-        )
-        self._reader_thread = threading.Thread(target=self._reader, daemon=True)
-        self._reader_thread.start()
-        self._wait_for("uciok")
-        self._send(f"setoption name EvalFile value {self.nnue_path}")
-        self._send(f"setoption name Threads value {self.threads}")
-        self._send(f"setoption name Hash value {self.hash_mb}")
-        self._send("isready")
-        self._wait_for("readyok")
-
-    def _send(self, cmd):
-        try:
-            self._proc.stdin.write(cmd + "\n")
-            self._proc.stdin.flush()
-        except Exception:
-            pass
-
-    def _wait_for(self, keyword, timeout=10):
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            try:
-                line = self._q.get(timeout=0.1)
-                if keyword in line:
-                    return True
-            except queue.Empty:
-                pass
-        return False
-
-    def get_best_move(self, fen, movetime_ms=2000):
-        self._start()
-        self._send("ucinewgame")
-        time.sleep(0.05)
-        self._send(f"position fen {fen}")
-        self._send(f"go movetime {movetime_ms}")
-        bestmove = None
-        score = 0
-        depth = 0
-        deadline = time.time() + (movetime_ms / 1000) + 5
-        while time.time() < deadline:
-            try:
-                line = self._q.get(timeout=0.1)
-                if line.startswith("bestmove"):
-                    parts = line.split()
-                    if len(parts) >= 2:
-                        bestmove = parts[1]
-                    break
-                if line.startswith("info"):
-                    m = re.search(r"score cp (-?\d+)", line)
-                    if m:
-                        score = int(m.group(1))
-                    m = re.search(r"depth (\d+)", line)
-                    if m:
-                        depth = int(m.group(1))
-            except queue.Empty:
-                pass
-        return {"move": bestmove, "score": score, "depth": depth}
-
-    def close(self):
-        if self._proc:
-            try:
-                self._send("quit")
-                self._proc.wait(timeout=3)
-            except Exception:
-                self._proc.terminate()
-            self._proc = None
 
 def _activate_window():
     """AppleScript 激活微信到前台"""
@@ -421,59 +217,17 @@ def execute_move(uci, recognizer, my_side):
 
 
 def main():
-    print("[*] 揭棋 AI v3.0 启动中...")
+    print("[*] 揭棋 AI v5.0 启动中...")
     recognizer = BoardRecognizer()
     print("[*] 识别器就绪")
 
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    engine_dir = os.path.join(base_dir, "engines")
-
-    xiangqi_ai_path = os.path.join(engine_dir, "xiangqi-ai")
-    pikajieqi_nnue = os.path.join(engine_dir, "pikafish.nnue")
-
-    # 引擎选择：优先 揭棋原生引擎 (纯算法, 无需 NNUE) → PikaJieQi → xiangqi-ai
-    engine_type = None
-    pikajieqi_engine = None
-    jieqi_engine = None
-    use_wine = False
-
-    # 0) 优先使用 miaosiSari 揭棋纯算法引擎 (PST 评估, 无需权重)
+    # 使用 miaosiSari 揭棋纯算法引擎 (PST 评估, 无需权重)
     try:
         from jieqi_engine import JieQiEngine
         jieqi_engine = JieQiEngine()
-        engine_type = "jieqi"
         print(f"[+] 使用引擎: 揭棋纯算法引擎 (PST, 无需 NNUE)")
     except Exception as e:
-        print(f"[!] 揭棋引擎加载失败: {e}")
-
-    # 1) 尝试原生 macOS 二进制
-    pikajieqi_native = os.path.join(engine_dir, "PikaJieQi")
-    # 2) 尝试 Windows exe (通过 Wine)
-    pikajieqi_exe = os.path.join(engine_dir, "PikaJieQi-modern.exe")
-
-    if engine_type is None:
-        for candidate, wine in [(pikajieqi_native, False), (pikajieqi_exe, True)]:
-            if not os.path.exists(candidate):
-                continue
-            label = f"Wine+{os.path.basename(candidate)}" if wine else "PikaJieQi"
-            print(f"[+] 检测到 {label}")
-            if os.path.exists(pikajieqi_nnue):
-                try:
-                    pikajieqi_engine = PikaJieQiEngine(candidate, pikajieqi_nnue, use_wine=wine)
-                    engine_type = "pikajieqi"
-                    use_wine = wine
-                    print(f"[+] 使用引擎: {label} (UCI)")
-                    break
-                except Exception as e:
-                    print(f"[!] {label} 启动失败: {e}")
-            else:
-                print(f"[!] 未找到 NNUE 文件, {label} 棋力较弱")
-
-    if engine_type is None and os.path.exists(xiangqi_ai_path):
-        engine_type = "xiangqi-ai"
-        print(f"[+] 使用引擎: xiangqi-ai")
-    if engine_type is None:
-        print("[!] 未找到任何引擎"); return
+        print(f"[!] 揭棋引擎加载失败: {e}"); return
 
     my_side = None
     last_was_green = False
@@ -508,42 +262,14 @@ def main():
 
                 print(recognizer.board_to_string(board))
 
-                if engine_type == "jieqi" and jieqi_engine:
-                    uci, score, depth = jieqi_engine.get_best_move(board, my_side, think_time=2.0)
-                    if uci:
-                        # 引擎 UCI 为己方视角 (rank = 9 - board_row)，等价于 execute_move/uci_to_human 的 'r' 分支
-                        print(f"[+] 推荐: {uci} → {uci_to_human(uci, board, 'r')} (分数:{score} 深度:{depth})")
-                        print("[*] 自动走子...")
-                        execute_move(uci, recognizer, "r")
-                    else:
-                        print("[!] 揭棋引擎无着法")
-                elif engine_type == "pikajieqi" and pikajieqi_engine:
-                    fen = board_to_pikajieqi_fen(board, my_side)
-                    print(f"[*] FEN: {fen}")
-                    result = pikajieqi_engine.get_best_move(fen, movetime_ms=2000)
-                    if result.get("move"):
-                        uci = result["move"]
-                        print(f"[+] 推荐: {uci} → {uci_to_human(uci, board, my_side)} (分数:{result['score']} 深度:{result['depth']})")
-                        print("[*] 自动走子...")
-                        execute_move(uci, recognizer, my_side)
-                    else:
-                        print("[!] PikaJieQi 无着法")
+                uci, score, depth = jieqi_engine.get_best_move(board, my_side, think_time=2.0)
+                if uci:
+                    # 引擎 UCI 为己方视角 (rank = 9 - board_row)，等价于 execute_move/uci_to_human 的 'r' 分支
+                    print(f"[+] 推荐: {uci} → {uci_to_human(uci, board, 'r')} (分数:{score} 深度:{depth})")
+                    print("[*] 自动走子...")
+                    execute_move(uci, recognizer, "r")
                 else:
-                    fen = board_to_fen(board, my_side)
-                    print(f"[*] FEN: {fen}")
-                    r = subprocess.run([xiangqi_ai_path, "best", "--fen", fen, "--strategy", "it2", "--time-limit", "2", "--json"],
-                                       capture_output=True, text=True, timeout=30)
-                    if r.returncode == 0:
-                        d = json.loads(r.stdout)
-                        if d.get("ok") and d.get("moves"):
-                            uci = d["moves"][0]["move"]
-                            print(f"[+] 推荐: {uci} → {uci_to_human(uci, board, my_side)} (分数:{d['moves'][0]['score']:.0f} 深度:{d['depth']})")
-                            print("[*] 自动走子...")
-                            execute_move(uci, recognizer, my_side)
-                        else:
-                            print("[!] 引擎无着法")
-                    else:
-                        print(f"[!] 引擎错误: {r.stderr}")
+                    print("[!] 揭棋引擎无着法")
 
                 print("-" * 40)
 
@@ -555,9 +281,6 @@ def main():
         except Exception as e:
             print(f"[!] {e}"); import traceback; traceback.print_exc()
             time.sleep(SCAN_INTERVAL)
-
-    if pikajieqi_engine:
-        pikajieqi_engine.close()
 
 
 if __name__ == "__main__":

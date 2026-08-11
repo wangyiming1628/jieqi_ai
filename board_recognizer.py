@@ -184,6 +184,8 @@ class BoardRecognizer:
         self._chess_chars = list(CHESS)
         self._chess_idx = np.array([self.char_list.index(c) for c in self._chess_chars])
         self._capture = None  # macOS: ScreenCapture 实例
+        self.last_debug = None  # 最近一次 detect 的调试信息 (供人工排查)
+        self.last_timings = {}  # 最近一次 detect 的各步骤耗时
         if sys.platform == "darwin":
             self._capture = ScreenCapture(target_title="天天象棋", target_owner="微信")
 
@@ -244,9 +246,13 @@ class BoardRecognizer:
 
     def detect(self, image: np.ndarray, my_side: str = None):
         """返回 10x9 棋盘。my_side 用于暗棋阵营推断。"""
+        _t = time.perf_counter
+        timings = {}
         h, w = image.shape[:2]
         mid_y = h / 2
+        _s = _t()
         dets = self.detector.detect(image)
+        timings["yolo_detect"] = _t() - _s
 
         board = [["."] * 9 for _ in range(10)]
 
@@ -264,6 +270,8 @@ class BoardRecognizer:
         # 第一遍：收集每格的裁剪图与元数据（不逐个推理）
         cells = []  # [(row, col, crop, is_hidden), ...]
         crops = []
+        debug_cells = []  # 调试信息：每格的 YOLO 框 / Hough 圆心 / 裁剪框
+        _s = _t()
         for (row, col), d in cell_best.items():
             cx, cy = d["x"], d["y"]
 
@@ -280,8 +288,12 @@ class BoardRecognizer:
                                         param1=80, param2=30, minRadius=25, maxRadius=55)
             if circles is not None:
                 pcx, pcy = map(int, circles[0][0][:2])
+                circle_found = True
+                circle_r = int(circles[0][0][2])
             else:
                 pcx, pcy = full.shape[1] // 2, full.shape[0] // 2
+                circle_found = False
+                circle_r = 0
 
             S = int(min(d["w"], d["h"]) * 0.58)
             cx2 = max(0, int(x1 + pcx - S // 2))
@@ -294,12 +306,26 @@ class BoardRecognizer:
             is_hidden = np.std(gray) < 40
             cells.append((row, col, crop, is_hidden))
             crops.append(crop)
+            debug_cells.append({
+                "row": row, "col": col,
+                "yolo_box": (x1, y1, x2, y2), "yolo_conf": d["conf"],
+                "hough_center": (x1 + pcx, y1 + pcy), "hough_found": circle_found, "hough_r": circle_r,
+                "crop_box": (cx2, cy2, cx3, cy3), "is_hidden": is_hidden,
+                "ocr_char": None, "ocr_conf": 0.0,
+            })
+
+        timings["crop_hough"] = _t() - _s
 
         # 优化2：一次批量推理所有棋子（替代逐格串行调用）
+        _s = _t()
         ocr_results = self._raw_ocr_batch(crops)
+        timings["ocr_type"] = _t() - _s
 
         # 第二遍：用批量结果填表
-        for (row, col, crop, is_hidden), (ch, conf) in zip(cells, ocr_results):
+        _s = _t()
+        for idx, ((row, col, crop, is_hidden), (ch, conf)) in enumerate(zip(cells, ocr_results)):
+            debug_cells[idx]["ocr_char"] = ch
+            debug_cells[idx]["ocr_conf"] = conf
             if ch and conf > 0.001:
                 detected = self._detect_side(crop, ch)
                 if detected:
@@ -309,7 +335,12 @@ class BoardRecognizer:
                 board[row][col] = side + ch
             else:
                 board[row][col] = "?"
+        timings["side_detect"] = _t() - _s
 
+        # 保存调试信息，供引擎无着法时人工排查
+        self.last_debug = {"image": image, "cells": debug_cells}
+
+        _s = _t()
         # 根据帥/將位置确定阵营：找到红帥和黑將所在半场
         red_half = None  # "top" (row 0-4) 或 "bottom" (row 5-9)
         for r in range(10):
@@ -371,7 +402,10 @@ class BoardRecognizer:
                     valid_cols = _HIDDEN_VALID.get((side, r))
                     if valid_cols is None or c not in valid_cols:
                         board[r][c] = "."
+        timings["postprocess"] = _t() - _s
 
+        timings["total"] = sum(timings.values())
+        self.last_timings = timings
         return board
 
     def board_to_string(self, board):

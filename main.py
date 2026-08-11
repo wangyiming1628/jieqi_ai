@@ -216,16 +216,64 @@ def execute_move(uci, recognizer, my_side):
     ], timeout=3)
 
 
+def save_recognition_debug(recognizer, board):
+    """引擎无着法时，把棋盘/YOLO框/HoughCircles圆心/58%裁剪框全部标注保存，供人工排查。
+
+    标注图例:
+      黄框  = YOLO 检测框 (右上角显示 conf)
+      青点  = HoughCircles 圆心 (实心=检测到, 空心=未检测到用中心兜底)
+      品红框= 58% 裁剪框 (实际送 OCR 的区域)
+      绿字  = OCR 识别结果 side+char (conf)
+    """
+    dbg = getattr(recognizer, "last_debug", None)
+    if not dbg:
+        print("[!] 无调试信息可保存")
+        return
+    img = dbg["image"].copy()
+    for cell in dbg["cells"]:
+        r, c = cell["row"], cell["col"]
+        x1, y1, x2, y2 = cell["yolo_box"]
+        cx2, cy2, cx3, cy3 = cell["crop_box"]
+        hx, hy = cell["hough_center"]
+
+        # YOLO 框 (黄)
+        cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 255), 2)
+        cv2.putText(img, f"({r},{c})", (x1, y1 - 6),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+        cv2.putText(img, f"{cell['yolo_conf']:.2f}", (x1, y2 + 16),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 255), 1)
+        # 58% 裁剪框 (品红)
+        cv2.rectangle(img, (cx2, cy2), (cx3, cy3), (255, 0, 255), 2)
+        # HoughCircles 圆心 (青色, 实心=找到 空心=兜底)
+        if cell["hough_found"]:
+            cv2.circle(img, (hx, hy), 6, (255, 255, 0), -1)
+            cv2.circle(img, (hx, hy), cell["hough_r"], (255, 255, 0), 1)
+        else:
+            cv2.circle(img, (hx, hy), 6, (255, 255, 0), 2)
+        # OCR 结果 (绿)
+        ch = cell["ocr_char"] or "?"
+        tag = f"{ch} {cell['ocr_conf']:.2f}" + ("[暗]" if cell["is_hidden"] else "")
+        cv2.putText(img, tag, (cx2, cy3 + 32),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+    sd = os.path.join(os.path.dirname(os.path.abspath(__file__)), "snapshot")
+    os.makedirs(sd, exist_ok=True)
+    path = os.path.join(sd, f"debug_recog_{time.strftime('%Y%m%d_%H%M%S')}.png")
+    cv2.imencode(".png", img)[1].tofile(path)
+    print(f"[*] 识别调试图已保存: {path}")
+    print(f"[*] 图例: 黄框=YOLO检测框  青点=Hough圆心(实心找到/空心兜底)  品红框=58%裁剪框  绿字=OCR结果")
+    return path
+
+
 def main():
     print("[*] 揭棋 AI v5.0 启动中...")
     recognizer = BoardRecognizer()
     print("[*] 识别器就绪")
 
-    # 使用 miaosiSari 揭棋纯算法引擎 (PST 评估, 无需权重)
+    # 揭棋纯算法引擎 (PST 评估, 无需权重)，跑在独立子进程中 (优先 PyPy, 4~5倍加速)
     try:
-        from jieqi_engine import JieQiEngine
-        jieqi_engine = JieQiEngine()
-        print(f"[+] 使用引擎: 揭棋纯算法引擎 (PST, 无需 NNUE)")
+        from engine_client import JieQiEngineClient
+        jieqi_engine = JieQiEngineClient(prefer_pypy=True)
     except Exception as e:
         print(f"[!] 揭棋引擎加载失败: {e}"); return
 
@@ -241,14 +289,22 @@ def main():
             is_green_now = is_my_turn(full_img)
             if is_green_now and not last_was_green:
                 print("\n[+] 轮到我方走棋！等待稳定...")
-                time.sleep(0.5)
+                time.sleep(0.3)
+                t_turn = time.perf_counter()
+                t0 = time.perf_counter()
                 full_img = recognizer._capture.capture_full()
                 if full_img is None: continue
                 board_img = crop_board(full_img)
+                t_capture = time.perf_counter() - t0
 
-                # 先识别（无side），用于判断阵营
-                board = recognizer.detect(board_img, my_side=None)
-                # 每局重新判断阵营：己方半场 row 5-9，看帥/將在哪个半场
+                # 单次识别：传入当前已知阵营 (首帧为 None，detect 内部靠帥/將自行推断)。
+                # detect 只在识别不出帥/將时才用 my_side 给暗子阵营兜底，正常帧结果与是否传 side 无关。
+                t0 = time.perf_counter()
+                board = recognizer.detect(board_img, my_side=my_side)
+                t_detect = time.perf_counter() - t0
+                tm = dict(recognizer.last_timings)
+
+                # 识别后更新阵营：己方半场 row 5-9，看帥/將在哪个半场
                 hs = any(board[r][c] == "r帥" for r in range(5, 10) for c in range(9))
                 hj = any(board[r][c] == "b將" for r in range(5, 10) for c in range(9))
                 new_side = "r" if hs else ("b" if hj else my_side)
@@ -257,27 +313,45 @@ def main():
                 if new_side != my_side:
                     my_side = new_side
                     print(f"[+] 己方: {'红' if my_side == 'r' else '黑'}方")
-                # 用正确side重新识别
-                board = recognizer.detect(board_img, my_side=my_side)
 
                 print(recognizer.board_to_string(board))
 
+                t0 = time.perf_counter()
                 uci, score, depth = jieqi_engine.get_best_move(board, my_side, think_time=2.0)
+                t_engine = time.perf_counter() - t0
+
+                # 各步骤耗时汇总
+                print("[耗时] 各步骤 (秒):")
+                print(f"    截图裁剪        : {t_capture:.3f}")
+                print(f"    识别            : {t_detect:.3f}  "
+                      f"[YOLO {tm.get('yolo_detect',0):.3f} | 裁剪+Hough {tm.get('crop_hough',0):.3f} | "
+                      f"类型OCR {tm.get('ocr_type',0):.3f} | 颜色 {tm.get('side_detect',0):.3f} | 后处理 {tm.get('postprocess',0):.3f}]")
+                print(f"    引擎着法计算    : {t_engine:.3f}")
+
                 if uci:
                     # 引擎 UCI 为己方视角 (rank = 9 - board_row)，等价于 execute_move/uci_to_human 的 'r' 分支
                     print(f"[+] 推荐: {uci} → {uci_to_human(uci, board, 'r')} (分数:{score} 深度:{depth})")
                     print("[*] 自动走子...")
+                    t0 = time.perf_counter()
                     execute_move(uci, recognizer, "r")
+                    print(f"[耗时] 自动走子        : {time.perf_counter() - t0:.3f}")
                 else:
                     print("[!] 揭棋引擎无着法")
+                    save_recognition_debug(recognizer, board)
 
+                print(f"[耗时] 本回合总计      : {time.perf_counter() - t_turn:.3f}")
                 print("-" * 40)
 
             last_was_green = is_green_now
             time.sleep(SCAN_INTERVAL)
 
         except KeyboardInterrupt:
-            print("\n[*] 停止"); break
+            print("\n[*] 停止")
+            try:
+                jieqi_engine.close()
+            except Exception:
+                pass
+            break
         except Exception as e:
             print(f"[!] {e}"); import traceback; traceback.print_exc()
             time.sleep(SCAN_INTERVAL)

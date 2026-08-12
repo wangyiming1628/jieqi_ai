@@ -480,7 +480,10 @@ class Searcher:
         pos.set()
         start = time.time()
         best_move, best_score, best_depth = None, 0, 0
-        for depth in range(5, 8):
+        # 迭代加深从浅层起跳: 浅层几十毫秒就能拿到可用着法作为保底,
+        # 之后逐层加深; 任何一层超时中断, 都还有上一层的结果可用。
+        # (原先从 depth 5 起跳, 开放中局单层可达 10s+, 一旦超时就两手空空)
+        for depth in range(2, 8):
             self.alphabeta(pos, -MATE_UPPER, MATE_UPPER, depth, nullmove=True, nullmove_now=True)
             move = self.tp_move.get(pos)
             if move is not None:

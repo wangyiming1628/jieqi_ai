@@ -10,6 +10,9 @@ MY_BOX_X1, MY_BOX_Y1 = 2708, 1461
 MY_BOX_X2, MY_BOX_Y2 = 2867, 1617
 CROP_W, CROP_H = (1529, 1695) if sys.platform == "darwin" else (1035, 1143)
 
+# 引擎选择: "pypy" = miaosiSari(alpha-beta, 默认) / "java" = Makinuohara(expectiminimax)
+ENGINE_TYPE = "pypy"
+
 PIECE_NAME = {
     "r帥": "帥", "r仕": "仕", "r相": "相", "r馬": "馬", "r車": "車", "r炮": "炮", "r兵": "兵",
     "b將": "將", "b士": "士", "b象": "象", "b馬": "馬", "b車": "車", "b炮": "炮", "b卒": "卒",
@@ -129,8 +132,8 @@ def _activate_window():
 
 def board_pos_to_screen(row, col, win_img, win_img_w, win_img_h):
     """棋盘 (row, col) → 屏幕绝对逻辑坐标
-    win_img: 全屏截图（Retina 2x），直接像素÷2=逻辑坐标
-    棋盘 = 全屏截图居中 1529x1695 区域，按 10x9 网格划分
+    win_img: 保留参数占位(未使用)，坐标只依赖屏幕像素宽高
+    棋盘 = 全屏居中 1529x1695 区域（Retina 2x 像素），按 10x9 网格划分，÷2 转逻辑坐标
     """
     ox = (win_img_w - CROP_W) // 2
     oy = (win_img_h - CROP_H) // 2
@@ -156,60 +159,25 @@ def execute_move(uci, recognizer, my_side):
 
     # 1. 激活窗口到前台
     _activate_window()
-    time.sleep(0.3)
+    time.sleep(0.15)
 
-    # 2. 全屏截图（Retina 2x），直接像素÷2=屏幕逻辑坐标，无需 win_pos
-    import pyautogui as pag
-    ss = pag.screenshot()
-    win_img = cv2.cvtColor(np.array(ss), cv2.COLOR_RGB2BGR)
-    h, w = win_img.shape[:2]
-    print(f"[*] 全屏截图: {w}x{h}")
+    # 2. 取屏幕像素尺寸 (Retina 2x)。
+    #    board_pos_to_screen 只需要屏幕宽高来定位居中棋盘, 不需要截图内容,
+    #    所以这里用 pyautogui.size() (逻辑尺寸 x2) 代替一次全屏截图, 省约 0.9s。
+    lw, lh = pyautogui.size()
+    w, h = lw * 2, lh * 2
 
     # 3. 计算屏幕坐标
-    fx, fy = board_pos_to_screen(fr, fc, win_img, w, h)
-    tx, ty = board_pos_to_screen(tr, tc, win_img, w, h)
+    fx, fy = board_pos_to_screen(fr, fc, None, w, h)
+    tx, ty = board_pos_to_screen(tr, tc, None, w, h)
     print(f"[*] 走子: ({fr},{fc})→({tr},{tc}) 屏幕: ({fx},{fy})→({tx},{ty})")
 
-    # 4.5 保存调试截图：在截图上画出所有格子中心和走子标记
-    debug_img = win_img.copy()
-    ox = (w - CROP_W) // 2
-    oy = (h - CROP_H) // 2
-    cw, ch = CROP_W / 9, CROP_H / 10
-    # 画 10x9 网格中心点
-    for rr in range(10):
-        for cc in range(9):
-            px = int(ox + cc * cw + cw / 2)
-            py = int(oy + rr * ch + ch / 2)
-            color = (0, 255, 0)  # 绿点
-            if rr == fr and cc == fc:
-                color = (0, 0, 255)  # 起点红点
-            elif rr == tr and cc == tc:
-                color = (255, 0, 0)  # 终点蓝点
-            cv2.circle(debug_img, (px, py), 5, color, -1)
-    # 画箭头从起点到终点
-    fx_px = int(ox + fc * cw + cw / 2)
-    fy_px = int(oy + fr * ch + ch / 2)
-    tx_px = int(ox + tc * cw + cw / 2)
-    ty_px = int(oy + tr * ch + ch / 2)
-    cv2.arrowedLine(debug_img, (fx_px, fy_px), (tx_px, ty_px), (0, 255, 255), 3)
-    # 画截图中心点
-    cv2.circle(debug_img, (w // 2, h // 2), 10, (0, 165, 255), -1)  # 橙色大圆
-    cv2.putText(debug_img, f"center({w//2},{h//2})", (w // 2 + 15, h // 2 + 5),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 165, 255), 2)
-    # 画棋盘裁剪区域
-    cv2.rectangle(debug_img, (ox, oy), (ox + CROP_W, oy + CROP_H), (255, 255, 0), 2)
-    # sd = os.path.join(os.path.dirname(os.path.abspath(__file__)), "snapshot")
-    # os.makedirs(sd, exist_ok=True)
-    # dbg_path = os.path.join(sd, f"debug_move_{time.strftime('%H%M%S')}.png")
-    # cv2.imencode(".png", debug_img)[1].tofile(dbg_path)
-    # print(f"[*] 调试截图已保存: {dbg_path}")
-
-    # 5. 走子
-    pyautogui.click(fx, fy); time.sleep(0.5)
-    pyautogui.click(tx, ty); time.sleep(0.3)
+    # 4. 走子
+    pyautogui.click(fx, fy); time.sleep(0.25)
+    pyautogui.click(tx, ty); time.sleep(0.1)
     print(f"[+] 已走子")
 
-    # 6. 切回 Terminal，确保下次能检测到状态框
+    # 5. 切回 Terminal，确保下次能检测到状态框
     subprocess.run([
         "osascript", "-e",
         'tell application "Terminal" to activate'
@@ -270,10 +238,10 @@ def main():
     recognizer = BoardRecognizer()
     print("[*] 识别器就绪")
 
-    # 揭棋纯算法引擎 (PST 评估, 无需权重)，跑在独立子进程中 (优先 PyPy, 4~5倍加速)
+    # 揭棋引擎, 跑在独立子进程中。ENGINE_TYPE 选择 miaosiSari(PyPy) 或 Makinuohara(Java)
     try:
-        from engine_client import JieQiEngineClient
-        jieqi_engine = JieQiEngineClient(prefer_pypy=True)
+        from engine_client import create_engine
+        jieqi_engine = create_engine(ENGINE_TYPE, prefer_pypy=True)
     except Exception as e:
         print(f"[!] 揭棋引擎加载失败: {e}"); return
 

@@ -4,3 +4,5 @@ snapshot/
 venv/
 tools/
 .codebuddy/
+.DS_Store
+engines/mak/classes/

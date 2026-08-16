@@ -191,14 +191,20 @@ class PypyEngineClient(_EngineClientBase):
 
 
 def create_engine(engine_type="pypy", prefer_pypy=True):
-    """引擎工厂。engine_type: "pypy"(默认) 或 "java"。
+    """引擎工厂。engine_type: "pypy"/"pypy3"(默认) 或 "java"。
     java 不可用(无 JDK 或无 classes)时自动回退到 pypy。"""
+    engine_type = engine_type.lower()
     if engine_type == "java":
         try:
             return JavaEngineClient()
         except Exception as e:
             print(f"[!] Java 引擎不可用 ({e}), 回退 miaosiSari 引擎")
             return PypyEngineClient(prefer_pypy=prefer_pypy)
+    # "pypy" 和 "pypy3" 都走 miaosiSari 引擎
+    if engine_type in ("pypy", "pypy3"):
+        return PypyEngineClient(prefer_pypy=True)
+    # 未知引擎类型，默认走 pypy
+    print(f"[!] 未知引擎类型 '{engine_type}'，回退 miaosiSari 引擎")
     return PypyEngineClient(prefer_pypy=prefer_pypy)
 
 

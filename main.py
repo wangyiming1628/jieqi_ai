@@ -10,8 +10,9 @@ MY_BOX_X1, MY_BOX_Y1 = 2708, 1461
 MY_BOX_X2, MY_BOX_Y2 = 2867, 1617
 CROP_W, CROP_H = (1529, 1695) if sys.platform == "darwin" else (1035, 1143)
 
-# 引擎选择: "pypy" = miaosiSari(alpha-beta, 默认) / "java" = Makinuohara(expectiminimax)
+# 引擎选择: "pypy" / "pypy3" = miaosiSari(alpha-beta) / "java" = Makinuohara(expectiminimax)
 ENGINE_TYPE = "pypy"
+THINK_TIME = 2.0
 
 PIECE_NAME = {
     "r帥": "帥", "r仕": "仕", "r相": "相", "r馬": "馬", "r車": "車", "r炮": "炮", "r兵": "兵",
@@ -285,7 +286,7 @@ def main():
                 print(recognizer.board_to_string(board))
 
                 t0 = time.perf_counter()
-                uci, score, depth = jieqi_engine.get_best_move(board, my_side, think_time=2.0)
+                uci, score, depth = jieqi_engine.get_best_move(board, my_side, think_time=THINK_TIME)
                 t_engine = time.perf_counter() - t0
 
                 # 各步骤耗时汇总
@@ -325,5 +326,21 @@ def main():
             time.sleep(SCAN_INTERVAL)
 
 
+def _parse_args():
+    """解析命令行参数: python main.py [engine] [think_time]"""
+    global ENGINE_TYPE, THINK_TIME
+    args = sys.argv[1:]
+    if len(args) >= 1:
+        ENGINE_TYPE = args[0].lower()
+    if len(args) >= 2:
+        try:
+            THINK_TIME = float(args[1])
+        except ValueError:
+            print(f"[!] think_time 必须是数字，收到: {args[1]}")
+            sys.exit(1)
+    print(f"[*] 引擎: {ENGINE_TYPE} | 思考时间: {THINK_TIME}s")
+
+
 if __name__ == "__main__":
+    _parse_args()
     main()

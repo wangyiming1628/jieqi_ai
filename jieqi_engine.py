@@ -35,6 +35,30 @@ INITIAL_DARK_POSITIONS = {
 # 棋子价值
 PIECE_VALUE = {"P": 44, "N": 108, "B": 23, "R": 233, "A": 23, "C": 101, "K": 2500}
 
+# MVV-LVA (Most Valuable Victim - Least Valuable Attacker)
+# 用于吃子着法排序: 被吃子价值越高、攻击子价值越低, 优先级越高
+# 明子类型 -> 基础价值(用于排序, 非评估值)
+_MVV_BASE = {"P": 100, "N": 300, "B": 300, "R": 500, "A": 300, "C": 300, "K": 10000,
+             "I": 100, "E": 300, "F": 300, "D": 500, "G": 300, "H": 300, "U": 200}
+
+def _mvv_lva_score(board, move):
+    """计算 MVV-LVA 排序分。吃子着法返回正数(越大优先级越高), 非吃子返回 0。"""
+    i, j = move
+    attacker = board[i]
+    victim = board[j]
+    if victim == "." or victim.isspace():
+        return 0
+    # 吃己方的子(不可能的情况, 防御性)
+    if victim.isupper():
+        return 0
+    # victim 是小写(对手棋子), 转为大写查价值
+    v_key = victim.upper()
+    a_key = attacker.upper() if attacker.isupper() else attacker
+    v_val = _MVV_BASE.get(v_key, 200)
+    a_val = _MVV_BASE.get(a_key, 200)
+    # MVV * 1024 - LVA, 保证 victim 价值优先
+    return v_val * 1024 - a_val
+
 # 方向常量
 N, E, S, W = -16, 1, 16, -1
 
@@ -363,6 +387,13 @@ class Searcher:
         self.tp_move = {}
         self.history = set()
         self.nodes = 0
+        # 历史启发表: { 着法(i,j): 分数 }
+        # 用于非吃子着法排序, beta cutoff 时加分
+        self.history_heur = {}
+        # LMR 参数: 前几着不做 reduction, 以及 depth 门槛
+        self.lmr_full_moves = 4
+        self.lmr_min_depth = 3
+        self.lmr_base_reduction = 1
 
     def quiescence(self, pos, moves, oppo):
         score = 0
@@ -402,20 +433,46 @@ class Searcher:
             pos.kongtou_score_opponent = 0
         return maxscore, argmax
 
+    def _order_moves(self, pos, moves, tt_move):
+        """按优先级对着法排序: TT move > MVV-LVA(吃子) > 历史启发(非吃子)。
+        返回排序后的着法列表(含 TT move, 去重)。"""
+        tt_list = [tt_move] if tt_move is not None else []
+        # 分离吃子和非吃子
+        captures = []
+        quiets = []
+        for m in moves:
+            if tt_move is not None and m == tt_move:
+                continue  # TT move 单独放最前面
+            if _mvv_lva_score(pos.board, m) > 0:
+                captures.append(m)
+            else:
+                quiets.append(m)
+        # 吃子按 MVV-LVA 降序
+        captures.sort(key=lambda m: _mvv_lva_score(pos.board, m), reverse=True)
+        # 非吃子按历史启发降序
+        quiets.sort(key=lambda m: self.history_heur.get(m, 0), reverse=True)
+        return tt_list + captures + quiets
+
+    def _is_capture(self, pos, move):
+        """判断是否为吃子着法。"""
+        return pos.board[move[1]] != "." and not pos.board[move[1]].isspace() and pos.board[move[1]].islower()
+
     def alphabeta(self, pos, alpha, beta, depth, root=True, nullmove=False, nullmove_now=False):
         global debug_var
         oppo = pos.rotate()
         if root:
             self.tp_score = {}
             self.tp_move = {}
+            self.history_heur = {}
         self.nodes += 1
         depth = max(depth, 0)
         if pos.score <= -MATE_LOWER:
             return -MATE_UPPER
-        moves = sorted(pos.gen_moves(), key=pos.value, reverse=True)
+        raw_moves = list(pos.gen_moves())
         killer = self.tp_move.get(pos)
-        for move in [killer] + moves:
-            if (move is not None) and pos.board[move[1]] == "k":
+        # 先检查杀棋
+        for move in [killer] + raw_moves if killer else raw_moves:
+            if move is not None and pos.board[move[1]] == "k":
                 self.tp_move[pos] = move
                 return MATE_UPPER
         entry = self.tp_score.get((pos, depth, root), Entry(-MATE_UPPER, MATE_UPPER))
@@ -429,32 +486,58 @@ class Searcher:
                 if val >= beta and self.alphabeta(pos, alpha, beta, depth - 3, root=False, nullmove=nullmove, nullmove_now=False):
                     return val
         nullmove_now = nullmove
+        # 用 MVV-LVA + 历史启发 对着法排序
+        moves = self._order_moves(pos, raw_moves, killer)
         if depth == 0:
             score = self.quiescence(pos, moves, oppo)
             return pos.score + pos.kongtou_score - pos.kongtou_score_opponent + score[0]
         best = -MATE_UPPER
         mvBest = None
-        for move in [killer] + moves:
-            if (move is not None) and (depth > 0):
-                if best == -MATE_UPPER:
-                    val = -self.alphabeta(pos.move(move), -beta, -alpha, depth - 1, root=False, nullmove=nullmove, nullmove_now=nullmove_now)
-                else:
-                    val = -self.alphabeta(pos.move(move), -alpha - 1, -alpha, depth - 1, root=False, nullmove=nullmove, nullmove_now=nullmove_now)
-                    if val > alpha and val < beta:
-                        val = -self.alphabeta(pos.move(move), -beta, -alpha, depth - 1, root=False, nullmove=nullmove, nullmove_now=nullmove_now)
-                if val >= MATE_UPPER:
-                    updated = pos.move(move).rotate()
-                    if any(updated.board[m[1]] == "k" for m in updated.gen_moves()):
-                        mvBest = move
-                        best = val
-                        break
-                if val > best and val > -MATE_UPPER:
-                    best = val
-                    mvBest = move
-                    if val > beta:
-                        break
+        move_idx = 0
+        for move in moves:
+            if move is None:
+                continue
+            is_cap = self._is_capture(pos, move)
+            # LMR: Late Move Reductions
+            # 条件: 非根节点、深度足够、不是 TT move 首着、不是吃子、已经搜了一定数量着法
+            do_lmr = (not root and depth >= self.lmr_min_depth and move_idx >= self.lmr_full_moves
+                      and not is_cap and best > -MATE_UPPER)
+            if best == -MATE_UPPER:
+                # 第一着(PV): 全窗口全深度搜索
+                val = -self.alphabeta(pos.move(move), -beta, -alpha, depth - 1, root=False, nullmove=nullmove, nullmove_now=nullmove_now)
+            else:
+                if do_lmr:
+                    # LMR: 先用 reduced depth + zero window 试探
+                    reduced = depth - 1 - self.lmr_base_reduction
+                    if reduced < 1:
+                        reduced = 1
+                    val = -self.alphabeta(pos.move(move), -alpha - 1, -alpha, reduced, root=False, nullmove=nullmove, nullmove_now=nullmove_now)
+                    # 若超过 alpha, 用完整 depth-1 重新 zero-window 搜索
                     if val > alpha:
-                        alpha = val
+                        val = -self.alphabeta(pos.move(move), -alpha - 1, -alpha, depth - 1, root=False, nullmove=nullmove, nullmove_now=nullmove_now)
+                else:
+                    # 普通 zero-window 搜索
+                    val = -self.alphabeta(pos.move(move), -alpha - 1, -alpha, depth - 1, root=False, nullmove=nullmove, nullmove_now=nullmove_now)
+                # 若在 (alpha, beta) 区间内, 全窗口重新确认
+                if val > alpha and val < beta:
+                    val = -self.alphabeta(pos.move(move), -beta, -alpha, depth - 1, root=False, nullmove=nullmove, nullmove_now=nullmove_now)
+            if val >= MATE_UPPER:
+                updated = pos.move(move).rotate()
+                if any(updated.board[m[1]] == "k" for m in updated.gen_moves()):
+                    mvBest = move
+                    best = val
+                    break
+            if val > best and val > -MATE_UPPER:
+                best = val
+                mvBest = move
+                if val > beta:
+                    # beta cutoff: 更新历史启发
+                    if not is_cap:
+                        self.history_heur[move] = self.history_heur.get(move, 0) + depth * depth
+                    break
+                if val > alpha:
+                    alpha = val
+            move_idx += 1
         if not mvBest and moves:
             mvBest = moves[0]
         if mvBest is not None:

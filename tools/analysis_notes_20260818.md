@@ -1,0 +1,289 @@
+# 揭棋 AI 项目分析与问答笔记（2026-08-18 对话整理）
+
+> 本文整理自当日关于 jieqi_ai 项目的一次完整对话，内容包括：
+> ① 项目棋力瓶颈分析与改进路线；② 引擎核心概念讲解（PST / 置换表 / 16×16 棋盘 / 迭代加深 / move·rotate·set / 字符串不可变）；
+> ③ 瓶颈 1 四个问题的具体修复方案；④ 新实现的引擎裁判程序 tools/referee.py 与 java vs pypy3 实测对局。
+
+---
+
+## 一、项目棋力瓶颈分析与改进路线
+
+### 1.1 现状
+
+系统流程：YOLO+OCR 识别盘面 → 纯 Python alpha-beta 引擎（miaosiSari 移植，jieqi_engine.py）算 2 秒 → 模拟点击。
+棋力天花板由默认引擎决定（PST 评估 + 期望值折叠 alpha-beta）；另有更弱的 Java 备选（Makinuohara，纯子力评估 MaterialEvaluator）。
+
+揭棋棋力 = 搜索深度 × 评估质量 × 不完全信息处理，三个轴都有短板，最致命的是第一和第三轴。
+
+### 1.2 瓶颈分析（按影响排序）
+
+**瓶颈 1：搜索速度/深度（最硬的物理瓶颈）**
+
+① 数据结构极慢
+- 棋盘是 256 字符不可变字符串，每走一步新建 5 根字符串（put×2 + 翻转×3），每次 put 内部还有 2 切片 + 2 拼接共 4 次分配
+- 每次 move()/rotate() 都调用 set() 对 153 格全盘重扫（PST 累加、空头炮扫描）
+- 置换表键直接用整个棋盘字符串（namedtuple 哈希 256 字节）
+- 结果：CPython 约几千~几万 NPS，PyPy 十几万级；C++ 引擎是百万级，同样 2 秒深度差 3~5 层
+
+② 迭代加深每层清空置换表
+- jieqi_engine.py L463-466：alphabeta(root=True) 开头清空 tp_score / tp_move / history_heur
+- search() 每个深度都传 root=True → 每层迭代都从零开始，上层成果全部作废，迭代加深的核心收益（上层指导下层排序）完全没拿到
+
+③ 深度硬上限 7 + 时间管理失控
+- `for depth in range(2, 8)` 残局分支因子低也被掐死在 7 层
+- 时间只在每层结束后检查，单层无法中断，开放中局单层可超 10s+（客户端被迫给 think_time+30 的超时余量）
+
+④ "静态搜索"不是静态搜索
+- quiescence()（L398-434）只是单遍静态打分取最大收益：无递归、无 stand-pat、无交换序列
+- 揭棋常见的车/炮连续吃子、多子连锁交换在水平线附近被系统性误判
+
+**瓶颈 2：不完全信息建模（揭棋的灵魂没做好）**
+
+① 翻开后的子在搜索树里被冻结：暗子移动后变成 "U"，gen_moves 直接跳过 U（L178）——同一棵搜索树里翻开的子永远不能再动，只能当靶子
+② 无风险敏感：翻开车还是兵用同一个期望值（average 表）评估，不会避开坏揭示、抓不住好揭示
+③ 暗子分布统计 bug（正确性问题）：_update_distribution（L679-698）从"当前盘面可见的明子"反推剩余暗子池，被吃掉的明子不在盘面上 → 被计回暗子池，中残局越久评估越失真（暗车/暗炮概率虚高）
+
+**瓶颈 3：评估函数单薄**
+
+- 只有手工 PST + 少量揭棋特例（空头炮、底线车、暗车风险、翻兵奖励），无机动性/王安全/子力配合
+- 参数从未自动调优；`self.history`（重复局面集合）、EVAL_ROUGHNESS 均为死代码
+- 开局库 library.py 仅几十个精确匹配局面；返回的 best_score 只是 pos.value(move) 单层贪心分
+
+**瓶颈 4：感知链路（实战表现隐性杀手）**
+
+- 引擎无条件信任识别结果，OCR 置信度阈值仅 0.001，误判一次即致命
+- 无跨帧状态跟踪（没有"上一帧+着法→期望盘面"校验），也没有已翻开/已被吃棋子的记忆（正是瓶颈 2③ 的根源）
+
+### 1.3 改进路线（按性价比）
+
+| 级别 | 内容 | 工作量 | 性质 |
+|---|---|---|---|
+| P0 | 修暗子分布 bug（跨回合状态跟踪）；TT 不再每层清空；去深度上限+软硬双时限 | 几小时~几天 | 正确性+提速 |
+| P1 | 真静态搜索（递归+stand-pat+SEE）；bytearray+make/unmake+增量评估+Zobrist；aspiration/PVS/futility/LMR 调参；think_time 自适应 | 1~2 周 | 深度+1~2 层 |
+| P2 | 评估项扩充+自对弈自动调参（SPSA/texel）；U 子解冻；揭示决策风险敏感（好/坏/期望三分支或 PIMC 采样） | 2~6 周 | 棋质 |
+| P3 | 移植 C++（NPS ×100~1000，深度+3~5）；AlphaZero 式自对弈+策略价值网络（参考 icyChessZero） | 1~3 月 | 架构跃迁 |
+| P4 | 跨帧棋局跟踪+识别不一致重拍；已揭示棋子记忆库 | 与棋力并行 | 实战稳定性 |
+
+---
+
+## 二、核心概念问答
+
+### 2.1 PST 评估是什么？
+
+PST（Piece-Square Table，棋子-位置价值表）：同一种棋子站在不同格子价值不同，把"子在哪个格子值多少分"预先写成 90 格的表，评估时查表求和。
+
+- 解决的问题：纯子力价值丢失位置信息（过河兵 vs 底线兵天差地别）
+- 本项目 PST 在 board/common_20210815.py：兵未过河 ≈0~15 分，过河 40~60，对方底线 75~113（中路最高）；车全局 270~346 且底线车特意加高（揭棋中底线车可横扫暗子）；帅只在九宫有值（顺带合法性约束）
+- 用法两处：Position.set() 全盘求和（对手用 254-i 镜像共用一套表）；value() 走一步只算 pst[目标格]-pst[出发格] 增量
+- 强在快（叶节点 32 次查表），弱在纯静态（不知道子与子的关系）；本项目在其上手工补了揭棋特例，但仍是手写死数字
+
+一句话：子力分回答"你有什么子"，PST 回答"你的子站得好不好"，更高层（机动性/王安全/NNUE）回答"配合得怎么样"。
+
+### 2.2 置换表是什么？
+
+置换表（Transposition Table）＝"搜索结果缓存"：以局面为键，存已算过的结论（分数界限、最佳着法），再遇到同一局面直接查表。
+
+- 有效性来源：不同着法顺序到达同一局面（transposition）；alpha-beta 着法排序会以各种顺序反复摸到同一批局面，典型加速 2~10 倍
+- 存两类东西：① 分数界限（上界 fail-low / 下界 fail-high / 精确值），查表时"至少分≥beta"可立刻返回；② 该局面最佳着法（hash move），排第一位提升剪枝
+- 本项目：`Entry = namedtuple("Entry", "lower upper")`，tp_score 键 (pos, depth, root)、tp_move 键 pos
+- 实现缺陷：键=256 字符串（标准做法是 Zobrist 整数增量哈希）；每层清空；超限 clear() 整表（应定容+depth-preferred 淘汰，且 1e7 条 dict 内存以 GB 计根本存不下）；键带 depth 无法"以深代浅"
+
+类比：开局库是人类/离线结果的"局面→着法"表；置换表是本次搜索自己算出的结果缓存。搜索的"错题本"——算过一遍的场面绝不算第二遍。
+
+### 2.3 棋盘如何定义？为什么 90 个位置需要 256 个字符？
+
+16×16"信箱式"（Mailbox）表示：256 字符串 = 16 行×16 列网格，中间挖出 10×9 真实棋区（网格行 3~12、列 3~11），四周填卫兵字符（空格/换行）。坐标换算 idx=(row+3)*16+(3+col)；遍历永远是 range(51,204)。
+
+三个理由：
+1. **卫兵带让越界检测免费**：朴素 90 格一维数组中，最右列 +1 会"回绕"到下一行第 0 列（wrap-around bug）；16 列网格里右边缘+1 是空格卫兵，`if q.isspace(): break` 一句自然停住，无需显式边界检查。卫兵厚 16-9=7 格 ≥ 马最大横向偏移 2
+2. **方向和坐标变整数运算**：N,E,S,W=-16,+1,+16,-1；16 是 2 的幂 → `i>>4` 取行、`i&15` 取列（代码里到处在用：底线判断、炮是否中路 j&15==7、蹩马腿 (j-i)&15、九宫限制 j<160）
+3. **字符编码自带信息**：大写=当前走子方、小写=对手；RNBAKCP=明子，DEFGHI/defghi=按初始格走法的暗子，U/u=翻开的期望值子；`p.isupper()`/`q.islower()` 就是免费的类型判断；rotate() 一行 `board[-2::-1].swapcase()` 完成翻转+换边
+
+注意：文件头 L23 注释"引擎索引 = (12-row)*16+(3+col)"是过时的（原项目 row 0 在下方），实际函数 `_row_col_to_engine_idx` 用 `(row+3)*16` 是对的。
+
+代价：利用率仅 35%（90/256），set() 扫 153 格、每步 5 根新串、TT 键 256 字节——正是搜索速度瓶颈的根源。
+
+### 2.4 迭代加深的原理？为什么上层能指导下层？
+
+定义：不直接搜到深度 D，而是 d=1,2,3,…,D 逐轮从头搜，把上一轮浅层成果喂给下一轮。
+
+① 重搜不亏（几何级数论证）：节点数随深度指数增长，深度 1~D-1 全部轮次加起来 ≈ 最后一层的 1.1~2 倍。重搜代价线性叠加，换来的收益是指数级的。
+
+② 结构性前提：深度 d 的搜索树 ⊃ 深度 d-1 的搜索树（同根、多一层）→ 上一轮访问过的每个局面这一轮必然再次经过，缓存必然命中。
+
+③ alpha-beta 对排序指数敏感：最差排序 O(b^d)（b=40,D=6 时 41 亿节点），完美排序 O(b^(d/2))（6.4 万节点）。浅一层搜出的结论恰是"哪个着法好"的最佳先验。
+
+三条指导通道：
+1. 根节点：上一层最佳着法（PV）在深层极大概率仍最佳或接近，先搜它 → 根 alpha 立刻抬高 → 全树 zero-window 剪枝率暴增
+2. 内部节点：置换表 hash move 排首位；上层的分数界限足够深时直接剪掉子树
+3. 历史启发：上层反复引发 beta cutoff 的安静着法累积高分（history_heur[move]+=depth*depth），下层继续优先
+
+额外收益：anytime——每完成一层更新一次 best_move，超时中断手里永远有上一层结果。
+
+本项目对照：L463-466 每层清空三表 → 只剩 anytime 收益，三条通道全断。修掉这三行是 P0 里性价比最高的一项。
+
+延伸：aspiration window——以上一层分数 s 为中心开窄窗 (s-δ, s+δ)，fail-high/low 再放宽重搜。
+
+### 2.5 为什么 put 需要新建（那么多）字符串？
+
+根本原因：Python 字符串不可变，`board[i]="R"` 直接 TypeError，改一个字符只能整串重组。
+
+一次走子的完整账本（move L291-300 + rotate_new L285-289）：
+- put×2（落子/放U、清起点）= 新字符串 2 根，每个 put 内部还有 2 切片+2 拼接共 4 次分配
+- rotate_new：逆序串、swapcase 串、+空格 串 = 再 3 根
+- 合计 ≈ 十几次对象分配，每次完整复制 256 字节
+
+代价：搜索树每节点一次 move() → CPU 大部分时间在 memcpy/分配上；GC 压力；新串还要当 TT 键再付一次 256 字节哈希；缓存不友好。
+
+正确替代（P1）：bytearray + make/unmake——`board[j]=board[i]; board[i]=ord('.')` 原地 O(1) 零分配，搜完 unmake 恢复现场，全树共用一块缓冲区。
+
+原作者取舍（sunfish 血统）：不可变字符串天然可哈希直接当 TT 键、rotate 一行实现、无"忘撤销污染盘面"bug——"优雅换性能"，在不限时场景合理，在 2 秒限时对弈中成瓶颈。
+
+### 2.6 move / rotate / set 都是干什么的？
+
+设计前提：sunfish 式"视角固定"——棋盘永远大写=当前走子方（下方）、小写=对手；走完一步翻转世界让对手成为"大写在下方"。
+
+流水线：gen_moves 枚举 → move() 走子 → rotate() 换边 → set() 重算统计 → 递归下一层。
+
+**set()（L92-145）——局面"体检报告"**，扫 153 格缓存派生量：
+| 字段 | 含义 |
+|---|---|
+| score_rough | 静态粗估分（±PST、U 子 ±期望），用于阈值判断（如 <-150 调整暗车风险） |
+| covered/covered_opponent | 双方剩余暗子数 → 估算对手暗车概率 possible_che |
+| che/che_opponent、zu | 双方已翻开车数、我方兵数 |
+| endline | 对方底线（网格行3）子数 → 炮沉底/车占底线加分触发条件 |
+| kongtoupao/kongtou_score | 空头炮检测（中路炮沿纵列向对方将扫描，check_kongtoupao L147-173），按车对比给 70/100 分，直接并入叶节点评估 |
+
+注意区分：score 是 move() 增量累加的精确账本；score_rough 是 set() 全盘重扫的粗估。
+
+**rotate()（L280-289）——一行换边**：`board[-2::-1].swapcase()+" "`：
+1. 字符串倒序 = 180° 旋转（i=16r+c → 254-i=16(15-r)+(14-c)，真实区精确自映射）
+2. swapcase 大小写互换 → 对手成为新的"当前走子方"，所有只为大写方写的逻辑（gen_moves/PST/value）原样可用
+3. -score + not turn：negamax 约定，分数取负、turn 翻转
+收益：红黑共用一套代码，减半且不会两套逻辑不同步。调用点：move() 内（rotate_new）、alphabeta L462 的 oppo。
+
+**move()（L291-300）——走子事务，四步**：
+1. value(move) 算增量分（PST 差 + 揭棋特例：炮沉底、车走 6/8 路、暗车风险、暗兵拱卒、吃子收益、吃将=MATE_UPPER）
+2. 改盘面：明子原字母移动；**暗子走动即翻开→落点写 "U"**（搜索不知道翻出什么，用期望值建模）——这就是 U 子的出生地
+3. 增量记账 score += movevalue（基础分永不重扫全盘——本引擎少有的增量设计）
+4. rotate_new 翻盘换边+分数取负 → set() 重算 → 产出对手视角新 Position
+
+联动成本：move/rotate 每次以 set() 全盘重扫收尾 → 搜索树每前进一个节点付 O(153)+分配；这些统计量本可增量维护（车被吃 che-=1 而已）——P1「make/unmake+增量评估」要把每节点成本压到 O(1)+零分配。
+
+---
+
+## 三、瓶颈 1 四个问题的修复方案
+
+**① 数据结构极慢 → 两层修复**
+
+层 1（不动架构，1~2 天，NPS ×2~5）：
+- put 改 bytearray 单次分配（bytearray(old)+两次原地写，替代 4 次分配）；rotate_new 用 bytearray(reversed(...)) 一次完成
+- TT 键改 Zobrist：预生成 ZOBRIST[piece][square] 随机 64 位数；障碍是每步整体 rotate 增量更新不便——绕法：维护棋子位置列表（≤32 子），翻转时逐子镜像换算重算 hash，O(32)
+- set() 瘦身：借助棋子列表让统计只遍历 32 子；不常用统计（空头炮）改惰性计算
+
+层 2（make/unmake 全重构，1~2 周，NPS ×5~20）：
+```python
+def make(self, i, j):
+    old = self.board[j]; self.board[j] = self.board[i]; self.board[i] = '.'
+    self.score += self.value(i, j); self.che += ...; self.hash ^= ...
+def unmake(self, i, j, old): ...
+```
+全树共用一块缓冲区、零分配、统计量 O(1)；代价是 gen_moves 要支持双视角、严防"忘撤销"。
+
+**② TT 每层清空 → 把三行清空挪到 search() 开头只清一次（半天，提速 1.5~3 倍）**
+
+删除 alphabeta 里 L463-466 的清空，挪到 search() 开头 → 每层迭代自然获得上层 hash move、分数界限、历史启发。顺带：tp_score 键去掉 root 分量；超限从 clear() 改容量上限+保留更深条目（Entry 加 depth 字段）；tp_move 可整局复用。验证：同局面同 think_time 对比返回 depth，正常直接加深 1~2 层。
+
+**③ 深度上限+时间管理 → 软硬双时限+无上限迭代（半天）**
+
+```python
+self.deadline = time.time() + max_time
+for depth in count(2):                        # 无上限
+    try: self.alphabeta(pos, ..., depth, ...)
+    except SearchTimeout: break
+    best_move = self.tp_move.get(pos) or best_move
+    if time.time() - start > max_time * 0.6: break   # 软时限: 不够开下一层就停
+# alphabeta 内: if self.nodes % 4096 == 0 and time.time() > self.deadline: raise SearchTimeout
+```
+中断层的结果弃用（只信完整层）；客户端超时余量可从 think_time+30 收紧回 +1；顺带把 best_score 改为搜索真实分。收益：残局自动冲 10+ 层，杜绝单层超时卡死。
+
+**④ 假静态搜索 → 标准递归 qsearch（1 天）**
+
+```python
+def qsearch(self, pos, alpha, beta, ply=0):
+    stand = pos.score + pos.kongtou_score - pos.kongtou_score_opponent
+    if stand >= beta or ply >= 24: return stand      # stand-pat + β剪枝 + 深度保险
+    if stand > alpha: alpha = stand
+    caps = [m for m in pos.gen_moves() if self._is_capture(pos, m)]   # 只递归吃子
+    caps.sort(key=lambda m: _mvv_lva_score(pos.board, m), reverse=True)
+    for m in caps:
+        if stand + _gain_estimate(pos, m) < alpha: continue           # delta 剪枝
+        val = -self.qsearch(pos.move(m), -beta, -alpha, ply + 1)
+        if val >= beta: return val
+        if val > alpha: alpha = val
+    return alpha
+```
+关键件：stand-pat+β剪枝（无交换局面 O(1) 返回）；递归吃子链（交换序列逐层展开，旧 rooted() 降级为排序启发）；揭棋特化——吃暗子必须进 qsearch（期望收益已有），"暗子移动到攻击位"二期再收。收益：唯一不加速度、直接加棋力的修复；同时让主搜索放心剪枝，间接提升有效深度。
+
+**实施顺序**：② TT 不清空 → ③ 双时限 → ④ 真静态搜索 → ① 层1 → ① 层2。前两项"几行代码换一层深度"，建议自对弈回归验证。
+
+---
+
+## 四、引擎裁判程序与实测对局
+
+### 4.1 裁判程序 tools/referee.py（277 行）
+
+- 公平信息：裁判 privately 洗牌暗子真身（帥/將明置），每回合只发"公共视野"（暗子=?），双方对称
+- 视角约定与 main.py 一致：发给引擎的棋盘永远"自己在 rows 5-9"；黑方走子前 180° 翻转、收到着法后翻回
+- 逐着合法性校验（jieqi_engine.gen_moves，暗子按所在格走法与真身无关）；非法着法/连续两次无响应判负
+- 规则：暗子首动翻开、吃暗子真身只对裁判揭晓、吃帥/將即胜、无着法判负、120 半着无吃子或 400 半着封顶判和
+- 每着计时 → JSON+文本棋谱存 tools/games/；支持 --red/--black/--think-time/--seed/--max-ply
+
+### 4.2 环境准备记录
+
+- Java 引擎按 engines/mak/SOURCE.md 流程编译：clone Makinuohara/2026-jieqi-AI → javac（本机 JDK 17 可编译，无需 21）25 个模块文件 + EngineBridge → engines/mak/classes/，启动自检 {"ok":true,"ready":true} 通过
+- pypy3 为本机 winget 安装的 PyPy 3.11.13，engine_client 自动选用
+
+### 4.3 实测对局：java(红) vs pypy3(黑)，每着 1.0s，seed=20260818
+
+```
+胜者: pypy (黑方) —— 第 42 着吃掉红帥, 获胜
+总步数: 42 着, 全局墙钟 63.8s
+java (红方): 21 着   总用时 21.1s   平均 1.01s   最长 1.06s   (score/depth 恒为 0)
+pypy (黑方): 21 着   总用时 42.7s   平均 2.03s   最长 4.05s   (深度 5~7)
+```
+棋谱：tools/games/game_20260818_174503.json / .txt
+
+对局简评：
+- 双方第 1 着同为 b2b9 炮打暗子（公认最强先手）；黑方第 2 着翻开即車，红方第 3 着暗车一格平移吃回
+- 中局分水岭：黑方逐步吃掉红方 炮/兵/暗車（第 34 着炮隔暗子炮架吃掉红方未翻的車，裁判验证了炮架合法性）/双炮；红方只换来卒×2、象×1
+- 败因：红帥第 29/31 着主动离宫游走（MaterialEvaluator 无王安全概念），黑車 40~42 着直线追杀；终局着 pypy 仅 0.002s（首着即吃将逐层秒回）
+- 实测印证瓶颈分析：java 硬预算每着精确 ~1.0s；pypy 软超时层间检查 → 每着超时 1~4 倍（瓶颈③）；java 桥不回报 score/depth
+
+复现：
+```powershell
+python tools\referee.py                            # java(红) vs pypy(黑), 每着1s
+python tools\referee.py --red pypy --black java    # 交换先后手
+python tools\referee.py --think-time 2.0 --seed 42
+```
+
+---
+
+## 附：关键代码位置速查
+
+| 主题 | 位置 |
+|---|---|
+| 迭代加深/深度上限 | jieqi_engine.py search() L560-579（range(2,8)） |
+| TT 每层清空 | jieqi_engine.py alphabeta() L463-466 |
+| TT 存取 | L478-482（查）、L552-557（存）、Entry L381 |
+| 假静态搜索 | quiescence() L398-434 |
+| U 子冻结 | gen_moves() L178 |
+| 暗子分布 bug | _update_distribution L679-698 |
+| 增量评分 | value() L302-378 |
+| 统计量缓存 | set() L92-145；空头炮 check_kongtoupao L147-173 |
+| 走子/换边 | move() L291-300；rotate/rotate_new L280-289；put L88 |
+| 棋盘转换 | board_to_engine_string L645-676；_row_col_to_engine_idx L633 |
+| PST 表 | board/common_20210815.py L119-268 |
+| 开局库 | board/library.py（kaijuku） |
+| Java 桥 | engines/mak/bridge/EngineBridge.java |
+| 裁判 | tools/referee.py；棋谱 tools/games/ |

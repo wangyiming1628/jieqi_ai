@@ -12,20 +12,20 @@
 
 注意: 所有非协议输出 (预热日志等) 一律走 stderr，保持 stdout 纯净只放 JSON。
 """
-import sys, os, json
+import sys, os, json, importlib
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from jieqi_engine import JieQiEngine
 
 
 def _log(msg):
     print(msg, file=sys.stderr, flush=True)
 
 
-def main():
-    engine = JieQiEngine()
+def main(engine_module="jieqi_engine"):
+    """engine_module: 引擎模块名。默认原版 jieqi_engine; 优化版 (TT保留+双时限) 传 jieqi_engine_v2。"""
+    engine = importlib.import_module(engine_module).JieQiEngine()
     runtime = "PyPy" if hasattr(sys, "pypy_version_info") else "CPython"
-    _log(f"[engine_server] 就绪 ({runtime} {sys.version.split()[0]})")
+    _log(f"[engine_server] 就绪 ({runtime} {sys.version.split()[0]}, engine={engine_module})")
 
     # JIT 预热 (PyPy 首次搜索有编译开销，先跑一次让热点编译)
     try:
@@ -73,4 +73,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # 可选命令行参数: 引擎模块名 (默认原版 jieqi_engine, 可传 jieqi_engine_v2)
+    main(sys.argv[1] if len(sys.argv) > 1 else "jieqi_engine")

@@ -1,17 +1,13 @@
 """
-揭棋引擎 - 基于 miaosiSari/Jieqi 的纯算法引擎 (PST 评估，无需 NNUE)
-
-搜索优化 (v5.6 起合入主线, 等墙钟时间对局实测净胜原版 1 局):
+揭棋引擎 v2 - jieqi_engine 的搜索优化版 (评估/走法生成等其余逻辑与原版完全一致):
   优化 1: 置换表不再每层迭代清空。原先 alphabeta(root=True) 开头清空
           tp_score/tp_move/history_heur, 导致迭代加深的上层成果全部作废;
           改为每次 search() 开始时清一次, 上层迭代的 hash move 排序与历史启发
           得以指导下层搜索。
-  优化 2: 双时限 + 深度封顶 12。原先 range(2,8) 封顶 7 层且时间只在层间检查,
-          单层可远超预算; 现在硬时限在层内周期性检查并抛 SearchTimeout 强制中断
-          (弃用该层不完整结果, 采用上一层完整结果), 预测式软时限
-          (elapsed + 2.0*iter_time > max_time) 决定是否开下一层。
-          深度封顶 12: 评估无王安全项, 超深搜索会诱导牺牲王安全的贪吃着法
-          (实测无上限时败局全部源于 depth 64 的贪吃)。
+  优化 2: 双时限 + 去掉深度硬上限。原先 for depth in range(2,8) 封顶 7 层,
+          且时间只在层间检查, 单层可远超预算; 现在深度无上限迭代, 软时限决定
+          是否开下一层, 硬时限在层内周期性检查并抛 SearchTimeout 强制中断
+          (弃用该层不完整结果, 采用上一层完整结果)。
 """
 import re, os, time, json
 from itertools import count

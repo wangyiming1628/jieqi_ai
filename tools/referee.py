@@ -4,7 +4,10 @@
 用法:
   python tools/referee.py                          # java(红) vs pypy(黑), 每着 1.0s
   python tools/referee.py --red pypy --black java  # 交换先后手
+  python tools/referee.py --red pypy2 --black pypy # 优化版(TT保留+双时限) vs 原版
   python tools/referee.py --think-time 0.5 --seed 42
+  # 等墙钟时间对局: 双方单独指定思考预算 (原版软超时会超标, 优化版硬上限不会)
+  python tools/referee.py --red pypy2 --red-think 2.5 --black pypy --black-think 1.0
 
 设计:
   - 裁判维护真实棋盘: 暗子真身随机洗牌后只有裁判知道, 引擎只收到公共视野(暗子显示为 ?),
@@ -116,7 +119,11 @@ def board_str(board):
 def make_engine(kind):
     if kind == "java":
         return JavaEngineClient(), "java (Makinuohara, expectiminimax)"
-    return PypyEngineClient(prefer_pypy=True), "pypy (miaosiSari, alpha-beta)"
+    if kind == "pypy2":
+        server = os.path.join(REPO, "engine_server_v2.py")
+        return PypyEngineClient(prefer_pypy=True, server_path=server), \
+            "pypy2 (miaosiSari 优化版: TT保留+双时限)"
+    return PypyEngineClient(prefer_pypy=True), "pypy (miaosiSari 原版, alpha-beta)"
 
 
 def ask_engine(engine, view, side, think_time):
@@ -137,8 +144,8 @@ def ask_engine(engine, view, side, think_time):
 
 
 def play(args):
-    print(f"[*] 裁判启动: {args.red} 执红先行 vs {args.black} 执黑, "
-          f"每着 {args.think_time}s, 随机种子 {args.seed}", flush=True)
+    print(f"[*] 裁判启动: {args.red} 执红先行(每着 {args.red_think}s) "
+          f"vs {args.black} 执黑(每着 {args.black_think}s), 随机种子 {args.seed}", flush=True)
     engines, labels = {}, {}
     for side in "rb":
         kind = args.red if side == "r" else args.black
@@ -162,7 +169,9 @@ def play(args):
             result = {"winner": "b" if side == "r" else "r", "reason": f"{SIDE_NAME[side]}方无合法着法, 判负"}
             break
 
-        uci, score, depth, dt, tries = ask_engine(engines[side], view, side, args.think_time)
+        uci, score, depth, dt, tries = ask_engine(
+            engines[side], view, side,
+            args.red_think if side == "r" else args.black_think)
         stats[side]["total"] += dt
         stats[side]["n"] += 1
         stats[side]["max"] = max(stats[side]["max"], dt)
@@ -244,13 +253,16 @@ def report(args, board, records, stats, result, wall):
     with open(base + ".json", "w", encoding="utf-8") as f:
         json.dump({
             "config": {"red": args.red, "black": args.black,
-                       "think_time": args.think_time, "seed": args.seed,
+                       "think_time": args.think_time,
+                       "red_think": args.red_think, "black_think": args.black_think,
+                       "seed": args.seed,
                        "max_ply": args.max_ply, "no_cap_draw": args.no_cap_draw},
             "result": result, "stats": stats, "moves": records,
             "final_board": board,
         }, f, ensure_ascii=False, indent=1)
     with open(base + ".txt", "w", encoding="utf-8") as f:
-        f.write(f"{args.red}(红) vs {args.black}(黑)  think={args.think_time}s seed={args.seed}\n")
+        f.write(f"{args.red}(红, think={args.red_think}s) vs "
+                f"{args.black}(黑, think={args.black_think}s)  seed={args.seed}\n")
         f.write(f"结果: {result}\n\n终局棋盘 (红方在下):\n{board_str(board)}\n\n着法记录:\n")
         for r in records:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
@@ -262,13 +274,18 @@ def report(args, board, records, stats, result, wall):
 
 def main():
     ap = argparse.ArgumentParser(description="揭棋引擎裁判: java vs pypy 完整对局")
-    ap.add_argument("--red", choices=["java", "pypy"], default="java", help="红方引擎 (默认 java)")
-    ap.add_argument("--black", choices=["java", "pypy"], default="pypy", help="黑方引擎 (默认 pypy)")
-    ap.add_argument("--think-time", type=float, default=1.0, help="每着思考秒数 (默认 1.0)")
+    ap.add_argument("--red", choices=["java", "pypy", "pypy2"], default="java", help="红方引擎 (默认 java)")
+    ap.add_argument("--black", choices=["java", "pypy", "pypy2"], default="pypy", help="黑方引擎 (默认 pypy)")
+    ap.add_argument("--think-time", type=float, default=1.0, help="双方每着思考秒数 (默认 1.0)")
+    ap.add_argument("--red-think", type=float, default=None, help="红方每着思考秒数 (缺省用 --think-time)")
+    ap.add_argument("--black-think", type=float, default=None, help="黑方每着思考秒数 (缺省用 --think-time)")
     ap.add_argument("--max-ply", type=int, default=400, help="最大半着数, 超出判和 (默认 400)")
     ap.add_argument("--no-cap-draw", type=int, default=120, help="连续无吃子和棋半着数 (默认 120)")
     ap.add_argument("--seed", type=int, default=20260818, help="暗子洗牌随机种子")
     args = ap.parse_args()
+    # 未单独指定时, 双方使用共同的 --think-time
+    args.red_think = args.red_think if args.red_think is not None else args.think_time
+    args.black_think = args.black_think if args.black_think is not None else args.think_time
     board, records, stats, result, wall = play(args)
     report(args, board, records, stats, result, wall)
 

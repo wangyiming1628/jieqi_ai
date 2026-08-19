@@ -167,9 +167,11 @@ class JavaEngineClient(_EngineClientBase):
 class PypyEngineClient(_EngineClientBase):
     """miaosiSari 纯算法引擎 (PyPy 优先, 回退 CPython)。"""
 
-    def __init__(self, prefer_pypy=True):
+    def __init__(self, prefer_pypy=True, server_path=None):
         super().__init__()
-        self.server_path = os.path.join(self.base_dir, "engine_server.py")
+        # server_path 可指定引擎服务端脚本: 默认原版 engine_server.py;
+        # 优化版 (TT保留+双时限) 传 engine_server_v2.py
+        self.server_path = server_path or os.path.join(self.base_dir, "engine_server.py")
         self.prefer_pypy = prefer_pypy
         self.python_bin = self._pick_interpreter()
         self.runtime_label = "PyPy" if "pypy" in os.path.basename(self.python_bin).lower() else "CPython"

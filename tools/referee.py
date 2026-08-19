@@ -123,6 +123,10 @@ def make_engine(kind):
         server = os.path.join(REPO, "engine_server_v2.py")
         return PypyEngineClient(prefer_pypy=True, server_path=server), \
             "pypy2 (miaosiSari 优化版: TT保留+双时限)"
+    if kind == "pypy3":
+        server = os.path.join(REPO, "engine_server_v3.py")
+        return PypyEngineClient(prefer_pypy=True, server_path=server), \
+            "pypy3 (v5.6 基线+真静态搜索)"
     return PypyEngineClient(prefer_pypy=True), "pypy (miaosiSari 原版, alpha-beta)"
 
 
@@ -274,8 +278,8 @@ def report(args, board, records, stats, result, wall):
 
 def main():
     ap = argparse.ArgumentParser(description="揭棋引擎裁判: java vs pypy 完整对局")
-    ap.add_argument("--red", choices=["java", "pypy", "pypy2"], default="java", help="红方引擎 (默认 java)")
-    ap.add_argument("--black", choices=["java", "pypy", "pypy2"], default="pypy", help="黑方引擎 (默认 pypy)")
+    ap.add_argument("--red", choices=["java", "pypy", "pypy2", "pypy3"], default="java", help="红方引擎 (默认 java)")
+    ap.add_argument("--black", choices=["java", "pypy", "pypy2", "pypy3"], default="pypy", help="黑方引擎 (默认 pypy)")
     ap.add_argument("--think-time", type=float, default=1.0, help="双方每着思考秒数 (默认 1.0)")
     ap.add_argument("--red-think", type=float, default=None, help="红方每着思考秒数 (缺省用 --think-time)")
     ap.add_argument("--black-think", type=float, default=None, help="黑方每着思考秒数 (缺省用 --think-time)")

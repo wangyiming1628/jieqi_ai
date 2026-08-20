@@ -64,7 +64,14 @@ def main(engine_module="jieqi_engine"):
             board = req["board"]
             my_side = req["my_side"]
             think_time = float(req.get("think_time", 2.0))
-            uci, score, depth = engine.get_best_move(board, my_side, think_time=think_time)
+            # 可选: 局面历史 (最近一次吃子以来) 与已方连续将军计数状态,
+            # 供引擎做重复/长将规避
+            history = req.get("history")
+            pos_history = [(b, s) for b, s in history] if history else None
+            check_state = req.get("check_state")
+            uci, score, depth = engine.get_best_move(
+                board, my_side, think_time=think_time,
+                pos_history=pos_history, check_state=check_state)
             print(json.dumps({"ok": True, "uci": uci, "score": score, "depth": depth}), flush=True)
         except Exception as e:
             import traceback

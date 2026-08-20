@@ -1,0 +1,55 @@
+pypy57(红, think=1.5s) vs pypy(黑, think=1.5s)  seed=20260930
+结果: {'winner': 'b', 'reason': '第 38 着吃掉 帥, 获胜'}
+
+终局棋盘 (红方在下):
+    0 1 2 3 4 5 6 7 8
+ 0 | b? · b? b將 · b? b? b? b?
+ 1 | · · · · · · · · ·
+ 2 | · b? · · · · · · ·
+ 3 | r兵 · b? · b? · · · ·
+ 4 | · · · · · · b卒 · ·
+ 5 | · · r兵 · r兵 · · · ·
+ 6 | · · · · · · · · ·
+ 7 | · · · · b車 · · · ·
+ 8 | · b車 · · · · · · ·
+ 9 | r? · r? · · · · r兵 ·
+
+着法记录:
+{"ply": 1, "side": "r", "uci": "e3e4", "src": [6, 4], "dst": [5, 4], "reveal": "兵", "captured": null, "score": 84, "depth": 5, "time_s": 1.377}
+{"ply": 2, "side": "b", "uci": "b2b9", "src": [2, 7], "dst": [9, 7], "reveal": "馬", "captured": "r兵", "score": 157, "depth": 4, "time_s": 1.514}
+{"ply": 3, "side": "r", "uci": "i0h0", "src": [9, 8], "dst": [9, 7], "reveal": "兵", "captured": "b馬", "score": 126.0, "depth": 5, "time_s": 1.198}
+{"ply": 4, "side": "b", "uci": "a3a4", "src": [3, 8], "dst": [4, 8], "reveal": "車", "captured": null, "score": 78, "depth": 5, "time_s": 1.035}
+{"ply": 5, "side": "r", "uci": "b2b9", "src": [7, 1], "dst": [0, 1], "reveal": "炮", "captured": "b卒", "score": 146, "depth": 5, "time_s": 0.74}
+{"ply": 6, "side": "b", "uci": "a4a6", "src": [4, 8], "dst": [6, 8], "reveal": null, "captured": "r仕", "score": 86, "depth": 5, "time_s": 1.532}
+{"ply": 7, "side": "r", "uci": "b9d9", "src": [0, 1], "dst": [0, 3], "reveal": null, "captured": "b士", "score": 46, "depth": 5, "time_s": 0.938}
+{"ply": 8, "side": "b", "uci": "e0f0", "src": [0, 4], "dst": [0, 3], "reveal": null, "captured": "r炮", "score": 172, "depth": 5, "time_s": 1.509}
+{"ply": 9, "side": "r", "uci": "c3c4", "src": [6, 2], "dst": [5, 2], "reveal": "兵", "captured": null, "score": 81, "depth": 5, "time_s": 1.537}
+{"ply": 10, "side": "b", "uci": "a6c6", "src": [6, 8], "dst": [6, 6], "reveal": null, "captured": "r仕", "score": 91, "depth": 5, "time_s": 0.779}
+{"ply": 11, "side": "r", "uci": "a3a4", "src": [6, 0], "dst": [5, 0], "reveal": "馬", "captured": null, "score": 86, "depth": 5, "time_s": 0.767}
+{"ply": 12, "side": "b", "uci": "c6f6", "src": [6, 6], "dst": [6, 3], "reveal": null, "captured": null, "score": 7, "depth": 5, "time_s": 0.904}
+{"ply": 13, "side": "r", "uci": "e0e1", "src": [9, 4], "dst": [8, 4], "reveal": null, "captured": null, "score": -20, "depth": 5, "time_s": 0.781}
+{"ply": 14, "side": "b", "uci": "f6f9", "src": [6, 3], "dst": [9, 3], "reveal": null, "captured": "r馬", "score": 116, "depth": 4, "time_s": 0.653}
+{"ply": 15, "side": "r", "uci": "b0a2", "src": [9, 1], "dst": [7, 0], "reveal": "兵", "captured": null, "score": 47, "depth": 5, "time_s": 1.168}
+{"ply": 16, "side": "b", "uci": "i3i4", "src": [3, 0], "dst": [4, 0], "reveal": "車", "captured": null, "score": 73, "depth": 5, "time_s": 0.897}
+{"ply": 17, "side": "r", "uci": "a4b2", "src": [5, 0], "dst": [7, 1], "reveal": null, "captured": null, "score": 3, "depth": 6, "time_s": 1.404}
+{"ply": 18, "side": "b", "uci": "i4c4", "src": [4, 0], "dst": [4, 6], "reveal": null, "captured": null, "score": 4, "depth": 4, "time_s": 0.796}
+{"ply": 19, "side": "r", "uci": "h2g2", "src": [7, 7], "dst": [7, 6], "reveal": "相", "captured": null, "score": 49, "depth": 4, "time_s": 1.523}
+{"ply": 20, "side": "b", "uci": "c4c7", "src": [4, 6], "dst": [7, 6], "reveal": null, "captured": "r相", "score": 49, "depth": 5, "time_s": 1.51}
+{"ply": 21, "side": "r", "uci": "e1f1", "src": [8, 4], "dst": [8, 5], "reveal": null, "captured": null, "score": -10, "depth": 5, "time_s": 0.729}
+{"ply": 22, "side": "b", "uci": "c7c8", "src": [7, 6], "dst": [8, 6], "reveal": null, "captured": null, "score": 0, "depth": 5, "time_s": 1.544}
+{"ply": 23, "side": "r", "uci": "f1f2", "src": [8, 5], "dst": [7, 5], "reveal": null, "captured": null, "score": -10, "depth": 7, "time_s": 0.886}
+{"ply": 24, "side": "b", "uci": "f9d9", "src": [9, 3], "dst": [9, 5], "reveal": null, "captured": "r相", "score": 115, "depth": 4, "time_s": 0.621}
+{"ply": 25, "side": "r", "uci": "f2e2", "src": [7, 5], "dst": [7, 4], "reveal": null, "captured": null, "score": 10, "depth": 6, "time_s": 0.743}
+{"ply": 26, "side": "b", "uci": "c3c4", "src": [3, 6], "dst": [4, 6], "reveal": "卒", "captured": null, "score": 54, "depth": 4, "time_s": 0.669}
+{"ply": 27, "side": "r", "uci": "a2a3", "src": [7, 0], "dst": [6, 0], "reveal": null, "captured": null, "score": 8, "depth": 6, "time_s": 1.076}
+{"ply": 28, "side": "b", "uci": "c8c7", "src": [8, 6], "dst": [7, 6], "reveal": null, "captured": null, "score": 0, "depth": 5, "time_s": 0.957}
+{"ply": 29, "side": "r", "uci": "e2e1", "src": [7, 4], "dst": [8, 4], "reveal": null, "captured": null, "score": 10, "depth": 6, "time_s": 0.763}
+{"ply": 30, "side": "b", "uci": "c7h7", "src": [7, 6], "dst": [7, 1], "reveal": null, "captured": "r馬", "score": 113, "depth": 4, "time_s": 0.674}
+{"ply": 31, "side": "r", "uci": "a3a4", "src": [6, 0], "dst": [5, 0], "reveal": null, "captured": null, "score": 11, "depth": 6, "time_s": 0.879}
+{"ply": 32, "side": "b", "uci": "d9c9", "src": [9, 5], "dst": [9, 6], "reveal": null, "captured": "r車", "score": 46, "depth": 5, "time_s": 1.033}
+{"ply": 33, "side": "r", "uci": "a4a5", "src": [5, 0], "dst": [4, 0], "reveal": null, "captured": null, "score": 10, "depth": 5, "time_s": 1.504}
+{"ply": 34, "side": "b", "uci": "h7h8", "src": [7, 1], "dst": [8, 1], "reveal": null, "captured": null, "score": 0, "depth": 12, "time_s": 0.423}
+{"ply": 35, "side": "r", "uci": "e1e2", "src": [8, 4], "dst": [7, 4], "reveal": null, "captured": null, "score": -10, "depth": 12, "time_s": 0.21}
+{"ply": 36, "side": "b", "uci": "c9c7", "src": [9, 6], "dst": [7, 6], "reveal": null, "captured": null, "score": -36, "depth": 12, "time_s": 0.027}
+{"ply": 37, "side": "r", "uci": "a5a6", "src": [4, 0], "dst": [3, 0], "reveal": null, "captured": null, "score": 13, "depth": 12, "time_s": 0.018}
+{"ply": 38, "side": "b", "uci": "c7e7", "src": [7, 6], "dst": [7, 4], "reveal": null, "captured": "r帥", "score": 3696, "depth": 12, "time_s": 0.009}

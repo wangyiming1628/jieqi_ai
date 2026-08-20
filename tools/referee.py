@@ -116,6 +116,74 @@ def board_str(board):
     return "\n".join(lines)
 
 
+def in_check(board, side):
+    """side 的王是否可被对方一步吃掉 (被将军)。board 为规范棋盘(红在下)。"""
+    view = board if side == "r" else flip_board(board)
+    estr = board_to_engine_string(view, side)
+    oppo = Position(estr, 0, True, 0).set().rotate()
+    return any(oppo.board[m[1]] == "k" for m in oppo.gen_moves())
+
+
+class PerpCheckTracker:
+    """单方连续将军计数器 (亚洲规则配额制: 容忍 6×将军子数 次连续将军)。
+    count: 不间断将军累计着数; squares: 参与将军的棋子当前格集合
+    (按子的轨迹认子, 不按格); retired: 已参与后被吃掉的子数 (配额只增不减)。
+    只有该方走出非将军着法才整体重置; 吃子不重置。"""
+
+    def __init__(self):
+        self.count = 0
+        self.squares = {}
+        self.retired = 0
+
+    @property
+    def quota(self):
+        return 6 * (len(self.squares) + self.retired)
+
+    def on_any_move(self, src, dst, has_capture):
+        """任一方走子后更新 tracked 子的轨迹 (被吃/移动)。必须先查吃子再挪子。"""
+        if has_capture and dst in self.squares:
+            del self.squares[dst]
+            self.retired += 1
+        if src in self.squares:
+            del self.squares[src]
+            self.squares[dst] = True
+
+    def deliver_check(self, dst):
+        """本方走出一着将军: 计数并纳入将军子。"""
+        self.count += 1
+        if dst not in self.squares:
+            self.squares[dst] = True
+
+    def exceeded(self):
+        return self.count > self.quota
+
+    def reset(self):
+        self.count = 0
+        self.squares = {}
+        self.retired = 0
+
+    def state_for(self):
+        """下发给引擎的已方状态 (规范坐标)。"""
+        return {"count": self.count,
+                "squares": [list(rc) for rc in self.squares],
+                "retired": self.retired}
+
+
+def adjudicate_long_check(loop, side):
+    """长将定罪检查。loop: [(board, side_to_move), ...] 从键首次记录时刻到当前候选着
+    的闭环 (含当前着)。side 为触发方: 其环内着法全部是将、且对方不是全部是将
+    (互将豁免) → 判 side 负; 否则返回 None。"""
+    oppo = "b" if side == "r" else "r"
+    my_chks, oppo_chks = [], []
+    for board, s in loop:
+        mover = "b" if s == "r" else "r"      # 形成该局面的走子方
+        (my_chks if mover == side else oppo_chks).append(in_check(board, s))
+    if my_chks and all(my_chks) and not (oppo_chks and all(oppo_chks)):
+        return {"winner": oppo,
+                "reason": f"{SIDE_NAME[side]}方长将 (键重复且环内{SIDE_NAME[side]}方每着均将军), 判负"}
+    return None
+
+
 def make_engine(kind):
     if kind == "java":
         return JavaEngineClient(), "java (Makinuohara, expectiminimax)"
@@ -127,16 +195,25 @@ def make_engine(kind):
         server = os.path.join(REPO, "engine_server_v3.py")
         return PypyEngineClient(prefer_pypy=True, server_path=server), \
             "pypy3 (v5.6 基线+真静态搜索)"
+    if kind == "pypy57":
+        server = os.path.join(REPO, "engine_server_v57.py")
+        return PypyEngineClient(prefer_pypy=True, server_path=server), \
+            "pypy57 (v5.7 基线, 无重复感知)"
     return PypyEngineClient(prefer_pypy=True), "pypy (miaosiSari 原版, alpha-beta)"
 
 
-def ask_engine(engine, view, side, think_time):
-    """向引擎要一步棋, 返回 (uci, 用时秒). 失败重试一次(客户端会自动重启子进程)."""
+def ask_engine(engine, view, side, think_time, pos_history=None, check_state=None):
+    """向引擎要一步棋, 返回 (uci, 用时秒). 失败重试一次(客户端会自动重启子进程).
+    pos_history: 开局以来的完整局面历史 [(规范棋盘, 轮到方), ...] (引擎需要跨吃子的
+    全量历史才能正确做长将归属; 裁判自己的重复判和仍用吃子清零的短历史);
+    check_state: 已方连续将军计数状态, 供引擎配额规避。"""
     last_err = None
     for attempt in (1, 2):
         t0 = time.perf_counter()
         try:
-            uci, score, depth = engine.get_best_move(view, side, think_time=think_time)
+            uci, score, depth = engine.get_best_move(
+                view, side, think_time=think_time,
+                pos_history=pos_history, check_state=check_state)
         except Exception as e:
             uci, score, depth, last_err = None, 0, 0, repr(e)
         dt = time.perf_counter() - t0
@@ -161,6 +238,14 @@ def play(args):
     stats = {s: {"total": 0.0, "n": 0, "max": 0.0, "times": []} for s in "rb"}
     records = []
     no_cap = 0            # 连续无吃子半着数
+    # [重复裁决] 短历史: 吃子清零, 用于三次重复判和 (循环不可能跨越吃子点)
+    pos_history = [([row[:] for row in board], "r")]
+    # [长将键表] 每方的 (将军前局面签名, src, dst) → 首次记录时的历史锚点索引;
+    # 键第二次出现即触发环检测 (锚点保证环从首次记录算起, 一将一闲里的闲着不会丢)
+    full_history = [([row[:] for row in board], "r")]
+    check_keys = {"r": {}, "b": {}}
+    # [配额裁决] 双方连续将军计数器 (吃子不重置, 非将军着才重置)
+    trackers = {s: PerpCheckTracker() for s in "rb"}
     result = None         # {"winner": "r"/"b"/None, "reason": str}
     t_start = time.perf_counter()
 
@@ -175,7 +260,8 @@ def play(args):
 
         uci, score, depth, dt, tries = ask_engine(
             engines[side], view, side,
-            args.red_think if side == "r" else args.black_think)
+            args.red_think if side == "r" else args.black_think,
+            pos_history=full_history, check_state=trackers[side].state_for())
         stats[side]["total"] += dt
         stats[side]["n"] += 1
         stats[side]["max"] = max(stats[side]["max"], dt)
@@ -218,6 +304,48 @@ def play(args):
         if captured in KING.values():                       # 吃掉帥/將 → 胜
             result = {"winner": side, "reason": f"第 {ply + 1} 着吃掉 {'將' if side == 'r' else '帥'}, 获胜"}
             break
+
+        # [配额+键表] 更新将军子轨迹 → 判定本着是否将军 → 超额/键重复裁决
+        next_side = "b" if side == "r" else "r"
+        for s in "rb":
+            trackers[s].on_any_move(src, dst, captured != ".")
+        if in_check(board, next_side):
+            trackers[side].deliver_check(dst)
+            if trackers[side].exceeded():
+                result = {"winner": next_side,
+                          "reason": f"第 {ply + 1} 着后 {SIDE_NAME[side]}方连续将军 "
+                                    f"{trackers[side].count} 次, 超过配额 "
+                                    f"(6×{len(trackers[side].squares) + trackers[side].retired} 将军子), 判负"}
+                break
+            # 键表: 键 = (将军前局面, 着法); 第二次出现 → 从锚点起环检测
+            pre_sig = tuple(tuple(r) for r in full_history[-1][0])
+            key = (pre_sig, src, dst)
+            if key in check_keys[side]:
+                anchor = check_keys[side][key]
+                loop = full_history[anchor + 1:] + [([row[:] for row in board], next_side)]
+                adj = adjudicate_long_check(loop, side)
+                if adj is not None:
+                    adj["reason"] = f"第 {ply + 1} 着后: {adj['reason']}"
+                    result = adj
+                    break
+            else:
+                check_keys[side][key] = len(full_history) - 1   # 锚点 = 将军前局面的索引
+        else:
+            trackers[side].reset()
+
+        # [重复裁决] 记录新局面; 短历史吃子清零重记, 全量历史只增不减
+        snap = [row[:] for row in board]
+        if captured != ".":
+            pos_history = [(snap, next_side)]
+        else:
+            pos_history.append((snap, next_side))
+        full_history.append((snap, next_side))
+        cur = pos_history[-1]
+        cnt = sum(1 for e in pos_history if e == cur)
+        if cnt >= 3:
+            result = {"winner": None, "reason": f"第 {ply + 1} 着后局面第 {cnt} 次出现, 判和"}
+            break
+
         if no_cap >= args.no_cap_draw:
             result = {"winner": None, "reason": f"连续 {no_cap} 个半着无吃子, 判和"}
             break
@@ -278,8 +406,8 @@ def report(args, board, records, stats, result, wall):
 
 def main():
     ap = argparse.ArgumentParser(description="揭棋引擎裁判: java vs pypy 完整对局")
-    ap.add_argument("--red", choices=["java", "pypy", "pypy2", "pypy3"], default="java", help="红方引擎 (默认 java)")
-    ap.add_argument("--black", choices=["java", "pypy", "pypy2", "pypy3"], default="pypy", help="黑方引擎 (默认 pypy)")
+    ap.add_argument("--red", choices=["java", "pypy", "pypy2", "pypy3", "pypy57"], default="java", help="红方引擎 (默认 java)")
+    ap.add_argument("--black", choices=["java", "pypy", "pypy2", "pypy3", "pypy57"], default="pypy", help="黑方引擎 (默认 pypy)")
     ap.add_argument("--think-time", type=float, default=1.0, help="双方每着思考秒数 (默认 1.0)")
     ap.add_argument("--red-think", type=float, default=None, help="红方每着思考秒数 (缺省用 --think-time)")
     ap.add_argument("--black-think", type=float, default=None, help="黑方每着思考秒数 (缺省用 --think-time)")

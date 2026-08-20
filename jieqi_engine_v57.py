@@ -755,83 +755,13 @@ def _update_distribution(engine_board_str):
     sumall = {0: {True: sum(di[0][True][key] for key in di[0][True]), False: sum(di[0][False][key] for key in di[0][False])}}
 
 
-def _flip_board(board):
-    """180° 翻转 10x9 棋盘 (规范棋盘 ↔ 对方视角)。"""
-    return [[board[9 - r][8 - c] for c in range(9)] for r in range(10)]
-
-
 class JieQiEngine:
     def __init__(self):
         self.searcher = Searcher()
         self._cache = {}
         self._cache_count = {}
 
-    @staticmethod
-    def _entry_in_check(board_str, side_to_move, my_side):
-        """[v5.8] 引擎串局面中, side_to_move 一方是否正被将军。"""
-        pos = Position(board_str, 0, True, 0).set()   # 大写 = my_side 视角
-        if side_to_move == my_side:
-            oppo = pos.rotate()
-            return any(oppo.board[m[1]] == "k" for m in oppo.gen_moves())
-        return any(pos.board[m[1]] == "k" for m in pos.gen_moves())
-
-    def _gives_check(self, pos, move):
-        """[v5.8] 走 move 后对方是否被将军 (直接吃王不算将军)。"""
-        if pos.board[move[1]] == "k":
-            return False
-        child = pos.move(move).rotate()   # 转回我方视角 (大写 = 我方)
-        return any(child.board[m[1]] == "k" for m in child.gen_moves())
-
-    def _check_key_table(self, my_side, oppo_side, hist):
-        """[v5.8] 从全量历史推导己方长将键表: (将军前局面串, src, dst) → 锚点索引。
-        着法由相邻历史条目的串差异还原 (一步着法恰有两格差异)。"""
-        keys = {}
-        for j in range(1, len(hist)):
-            bs_prev, _ = hist[j - 1]
-            bs_j, s_j = hist[j]
-            if s_j != oppo_side:          # 轮到对方走 ⟺ 上一着是我方走的
-                continue
-            if not self._entry_in_check(bs_j, s_j, my_side):
-                continue                  # 我方该着不是将军, 不记键
-            diffs = [i for i in range(len(bs_prev)) if bs_prev[i] != bs_j[i]]
-            if len(diffs) != 2:
-                continue
-            a, b = diffs
-            src_i, dst_i = (a, b) if bs_j[a] == "." else (b, a)
-            keys[(bs_prev, src_i, dst_i)] = j - 1   # 锚点 = 将军前局面条目的索引
-        return keys
-
-    def _key_blocks(self, pos, my_side, oppo_side, move, keys, hist):
-        """[v5.8] 键表拦截: move 是将军着且键已在表中 → 从锚点起环检测:
-        环内我方全将且对方不全将(互将豁免) → 会被判长将负, 返回 True。"""
-        key = (pos.board, move[0], move[1])
-        if key not in keys:
-            return False
-        anchor = keys[key]
-        child = pos.move(move)                        # 对方视角
-        # rotate 路径串尾是空格, 历史签名串尾是 '\n', 统一规范化
-        my_view_str = child.board[-2::-1].swapcase() + "\n"
-        loop = hist[anchor + 1:] + [(my_view_str, oppo_side)]
-        my_chks, oppo_chks = [], []
-        for bs, s in loop:
-            mover = my_side if s == oppo_side else oppo_side
-            (my_chks if mover == my_side else oppo_chks).append(
-                self._entry_in_check(bs, s, my_side))
-        return bool(my_chks) and all(my_chks) and not (oppo_chks and all(oppo_chks))
-
-    def _quota_blocks(self, pos, my_side, move, check_state, tracked_squares):
-        """[v5.8] 配额拦截: 本着若是将军且将超过配额 6×将军子数, 返回 True。
-        tracked_squares: 已方已参与将军的棋子当前格集合 (引擎视角坐标)。"""
-        if self._gives_check(pos, move):
-            src_rc = _engine_idx_to_row_col(move[0])
-            total = len(tracked_squares) + check_state.get("retired", 0)
-            if src_rc not in tracked_squares:
-                total += 1                     # 新将军子加入, 配额同步上调
-            if check_state["count"] + 1 > 6 * total:
-                return True
-        return False
-
-    def get_best_move(self, board, my_side, think_time=2.0, pos_history=None, check_state=None):
+    def get_best_move(self, board, my_side, think_time=2.0):
         """返回 (uci_move, score, depth)。uci 为己方视角坐标 (row 0-9, 己方在下)"""
         global di, sumall, average
 
@@ -845,38 +775,6 @@ class JieQiEngine:
             return (_engine_idx_to_uci(move[0]) + _engine_idx_to_uci(move[1]), 0, 0)
 
         move, score, depth = self.searcher.search(pos, max_time=think_time)
-        # [v5.8] 长将双安检 (硬逻辑, 搜索无否决权):
-        #   1) 键表拦截: 候选将军着的键 (当前局面, 着法) 已在己方键表中, 且从锚点
-        #      起环检测判我长将 → 没收 (判定与裁判同构, 检测点在自己着法上, 无需前瞻);
-        #   2) 配额拦截: 本着将是超配额的第 N 次连续将军 → 没收。
-        if move is not None and pos_history:
-            hist = []                  # 历史 → 引擎视角签名, 建一次全体候选共用
-            for b, s in pos_history:
-                view = b if my_side == "r" else _flip_board(b)
-                hist.append((board_to_engine_string(view, my_side), s))
-            oppo_side = "b" if my_side == "r" else "r"
-            keys = self._check_key_table(my_side, oppo_side, hist)
-            root_moves = list(pos.gen_moves())
-            bad = set()
-            if keys:
-                for m in root_moves:
-                    if self._gives_check(pos, m) \
-                            and self._key_blocks(pos, my_side, oppo_side, m, keys, hist):
-                        bad.add(m)
-            if check_state:
-                tracked = set()
-                for r, c_ in check_state.get("squares", []):
-                    if my_side == "b":
-                        r, c_ = 9 - r, 8 - c_   # 规范坐标 → 引擎视角
-                    tracked.add((r, c_))
-                for m in root_moves:
-                    if self._quota_blocks(pos, my_side, m, check_state, tracked):
-                        bad.add(m)
-            if move in bad:
-                safe = [m for m in root_moves if m not in bad]
-                if safe:
-                    pick = max(safe, key=pos.value)
-                    move, score, depth = pick, pos.value(pick), -2   # -2 标识安检兜底
         if move is not None:
             uci = _engine_idx_to_uci(move[0]) + _engine_idx_to_uci(move[1])
             return uci, score, depth

@@ -75,13 +75,21 @@ class _EngineClientBase:
         except Exception:
             return False
 
-    def get_best_move(self, board, my_side, think_time=2.0):
-        """返回 (uci, score, depth); 失败返回 (None, 0, 0)。"""
+    def get_best_move(self, board, my_side, think_time=2.0, pos_history=None, check_state=None):
+        """返回 (uci, score, depth); 失败返回 (None, 0, 0)。
+        pos_history: 最近一次吃子以来的局面历史 [(规范棋盘, 轮到方), ...];
+        check_state: 已方连续将军计数状态 {count, squares, retired}。
+        两者供引擎做重复/长将规避; 缺省 None 表示不提供。"""
         if self._proc is None or self._proc.poll() is not None:
             print("[!] 引擎子进程不在运行, 重启中...")
             self._start()
 
-        if not self._send({"cmd": "go", "board": board, "my_side": my_side, "think_time": think_time}):
+        req = {"cmd": "go", "board": board, "my_side": my_side, "think_time": think_time}
+        if pos_history:
+            req["history"] = [[b, s] for b, s in pos_history]
+        if check_state:
+            req["check_state"] = check_state
+        if not self._send(req):
             print("[!] 发送失败, 重启引擎子进程...")
             self._restart()
             return None, 0, 0

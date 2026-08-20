@@ -26,11 +26,12 @@ def reason_en(reason):
 
 def side_stats(rec, side):
     ms = [m for m in rec["moves"] if m["side"] == side]
-    ts = [m["time_s"] for m in ms]
-    ds = [m["depth"] for m in ms if m["depth"] > 0]   # depth=0 是开局库着法, 不计
+    ts = [m["time_s"] for m in ms if "time_s" in m]   # 非法着法记录无用时字段
+    ds = [m["depth"] for m in ms if m.get("depth", 0) > 0]   # depth=0 是开局库着法, 不计
     return {
         "moves": len(ms),
-        "total": sum(ts), "avg": sum(ts) / len(ts), "max": max(ts),
+        "total": sum(ts), "avg": sum(ts) / len(ts) if ts else 0.0,
+        "max": max(ts) if ts else 0.0,
         "avg_depth": sum(ds) / len(ds) if ds else 0, "max_depth": max(ds) if ds else 0,
     }
 

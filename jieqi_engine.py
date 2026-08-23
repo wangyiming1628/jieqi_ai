@@ -607,7 +607,7 @@ class Searcher:
         for depth in count(2):
             iter_start = time.time()
             try:
-                self.alphabeta(pos, -MATE_UPPER, MATE_UPPER, depth, nullmove=True, nullmove_now=True)
+                root_val = self.alphabeta(pos, -MATE_UPPER, MATE_UPPER, depth, nullmove=True, nullmove_now=True)
             except SearchTimeout:
                 break
             iter_time = time.time() - iter_start
@@ -615,8 +615,9 @@ class Searcher:
             if move is not None:
                 best_move = move
                 best_depth = depth
-                # 重新评估该着法得到分数
-                best_score = pos.value(move)
+                # [v5.10] 上报局面绝对分 = 本层完整搜索的根值 (行棋方视角, 正=行棋方优);
+                #      原先报 pos.value(move) 单步静态增量, 与搜索结论严重脱节误导日志
+                best_score = root_val
             # [v2] 软时限 (预测式): 按上一层耗时的 ~2 倍估算下一层成本 (TT 持久化后
             #      实测迭代间增长仅 1.1~3 倍), 预计装不进剩余预算就不再开新层;
             #      即使误判, 硬时限也会保证不超预算, 只是浪费掉被中断层的部分算力
@@ -629,10 +630,10 @@ class Searcher:
         if best_move is None:
             # [v2] 保底: 首层即超时 (think_time 极小或局面极复杂) 时不限时限搜一层浅层
             self.deadline = 0.0
-            self.alphabeta(pos, -MATE_UPPER, MATE_UPPER, 2, nullmove=True, nullmove_now=True)
+            root_val = self.alphabeta(pos, -MATE_UPPER, MATE_UPPER, 2, nullmove=True, nullmove_now=True)
             move = self.tp_move.get(pos)
             if move is not None:
-                best_move, best_depth, best_score = move, 2, pos.value(move)
+                best_move, best_depth, best_score = move, 2, root_val   # 同报根值绝对分
         return best_move, best_score, best_depth
 
     def calc_average(self, version=0):

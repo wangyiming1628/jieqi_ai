@@ -1,7 +1,7 @@
 """
 揭棋 AI 主程序 - 状态框检测 + 引擎 + 自动走子
 """
-import sys, os, time, subprocess, cv2, numpy as np, re
+import sys, os, time, subprocess, threading, cv2, numpy as np, re
 import pyautogui
 from board_recognizer import BoardRecognizer
 
@@ -233,10 +233,69 @@ def save_recognition_debug(recognizer, board):
     return path
 
 
+def save_manual_snapshot(recognizer):
+    """手动截图: 保存全屏截图 + 棋盘裁剪区原图 (不跑识别, 供事后人工核对/离线重识别)。"""
+    full_img = None
+    try:
+        if recognizer._capture is not None:
+            full_img = recognizer._capture.capture_full()
+    except Exception:
+        full_img = None
+    if full_img is None:
+        try:   # Windows 兼容: pyautogui 截图 (RGB → BGR)
+            full_img = np.array(pyautogui.screenshot())[:, :, ::-1].copy()
+        except Exception:
+            pass
+    if full_img is None:
+        print("[!] 手动截图失败: 无法获取屏幕画面")
+        return None
+    sd = os.path.join(os.path.dirname(os.path.abspath(__file__)), "snapshot")
+    os.makedirs(sd, exist_ok=True)
+    ts = time.strftime("%Y%m%d_%H%M%S")
+    p_full = os.path.join(sd, f"manual_full_{ts}.png")
+    cv2.imencode(".png", full_img)[1].tofile(p_full)
+    msg = f"[+] 手动截图已保存: {p_full}"
+    try:
+        p_board = os.path.join(sd, f"manual_board_{ts}.png")
+        cv2.imencode(".png", crop_board(full_img))[1].tofile(p_board)
+        msg += f" | 棋盘区: {p_board}"
+    except Exception:
+        pass
+    print(msg, flush=True)
+    return p_full
+
+
+def _manual_capture_thread(recognizer):
+    """后台监听手动截图热键: Windows 按 s 键, macOS 按回车。"""
+    if os.name == "nt":
+        import msvcrt
+        print("[*] 手动截图: 在本终端窗口聚焦时按 s 键")
+        while True:
+            try:
+                if msvcrt.kbhit() and msvcrt.getch() in (b"s", b"S"):
+                    save_manual_snapshot(recognizer)
+            except Exception as e:
+                print(f"[!] 手动截图异常: {e}")
+            time.sleep(0.1)
+    else:
+        print("[*] 手动截图: 在本终端窗口按回车")
+        while True:
+            try:
+                input()
+                save_manual_snapshot(recognizer)
+            except EOFError:
+                break
+            except Exception as e:
+                print(f"[!] 手动截图异常: {e}")
+
+
 def main():
     print("[*] 揭棋 AI v5.0 启动中...")
     recognizer = BoardRecognizer()
     print("[*] 识别器就绪")
+
+    # 手动截图热键监听 (守护线程, 不阻塞主循环)
+    threading.Thread(target=_manual_capture_thread, args=(recognizer,), daemon=True).start()
 
     # 揭棋引擎, 跑在独立子进程中。ENGINE_TYPE 选择 miaosiSari(PyPy) 或 Makinuohara(Java)
     try:

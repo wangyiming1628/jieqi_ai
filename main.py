@@ -344,7 +344,7 @@ def main():
                 print(recognizer.board_to_string(board))
 
                 t0 = time.perf_counter()
-                uci, score, depth = jieqi_engine.get_best_move(board, my_side, think_time=2.0)
+                uci, score, depth = jieqi_engine.get_best_move(board, my_side, think_time=3.0)
                 t_engine = time.perf_counter() - t0
 
                 # 各步骤耗时汇总

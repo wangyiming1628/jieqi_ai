@@ -125,10 +125,10 @@ def in_check(board, side):
 
 
 class PerpCheckTracker:
-    """单方连续将军计数器 (亚洲规则配额制: 容忍 6×将军子数 次连续将军)。
-    count: 不间断将军累计着数; squares: 参与将军的棋子当前格集合
-    (按子的轨迹认子, 不按格); retired: 已参与后被吃掉的子数 (配额只增不减)。
-    只有该方走出非将军着法才整体重置; 吃子不重置。"""
+    """单方连续将军计数器 (v5.9 配额制: 容忍 min(3×将军子数, 9) 次连续将军,
+    比亚洲规则 6×子数 更严)。count: 不间断将军累计着数; squares: 参与将军的
+    棋子当前格集合 (按子的轨迹认子, 不按格); retired: 已参与后被吃掉的子数
+    (配额只增不减)。只有该方走出非将军着法才整体重置; 吃子不重置。"""
 
     def __init__(self):
         self.count = 0
@@ -137,7 +137,7 @@ class PerpCheckTracker:
 
     @property
     def quota(self):
-        return 6 * (len(self.squares) + self.retired)
+        return min(3 * (len(self.squares) + self.retired), 9)
 
     def on_any_move(self, src, dst, has_capture):
         """任一方走子后更新 tracked 子的轨迹 (被吃/移动)。必须先查吃子再挪子。"""
@@ -169,21 +169,6 @@ class PerpCheckTracker:
                 "retired": self.retired}
 
 
-def adjudicate_long_check(loop, side):
-    """长将定罪检查。loop: [(board, side_to_move), ...] 从键首次记录时刻到当前候选着
-    的闭环 (含当前着)。side 为触发方: 其环内着法全部是将、且对方不是全部是将
-    (互将豁免) → 判 side 负; 否则返回 None。"""
-    oppo = "b" if side == "r" else "r"
-    my_chks, oppo_chks = [], []
-    for board, s in loop:
-        mover = "b" if s == "r" else "r"      # 形成该局面的走子方
-        (my_chks if mover == side else oppo_chks).append(in_check(board, s))
-    if my_chks and all(my_chks) and not (oppo_chks and all(oppo_chks)):
-        return {"winner": oppo,
-                "reason": f"{SIDE_NAME[side]}方长将 (键重复且环内{SIDE_NAME[side]}方每着均将军), 判负"}
-    return None
-
-
 def make_engine(kind):
     if kind == "java":
         return JavaEngineClient(), "java (Makinuohara, expectiminimax)"
@@ -202,18 +187,15 @@ def make_engine(kind):
     return PypyEngineClient(prefer_pypy=True), "pypy (miaosiSari 原版, alpha-beta)"
 
 
-def ask_engine(engine, view, side, think_time, pos_history=None, check_state=None):
+def ask_engine(engine, view, side, think_time, check_state=None):
     """向引擎要一步棋, 返回 (uci, 用时秒). 失败重试一次(客户端会自动重启子进程).
-    pos_history: 开局以来的完整局面历史 [(规范棋盘, 轮到方), ...] (引擎需要跨吃子的
-    全量历史才能正确做长将归属; 裁判自己的重复判和仍用吃子清零的短历史);
     check_state: 已方连续将军计数状态, 供引擎配额规避。"""
     last_err = None
     for attempt in (1, 2):
         t0 = time.perf_counter()
         try:
             uci, score, depth = engine.get_best_move(
-                view, side, think_time=think_time,
-                pos_history=pos_history, check_state=check_state)
+                view, side, think_time=think_time, check_state=check_state)
         except Exception as e:
             uci, score, depth, last_err = None, 0, 0, repr(e)
         dt = time.perf_counter() - t0
@@ -240,10 +222,6 @@ def play(args):
     no_cap = 0            # 连续无吃子半着数
     # [重复裁决] 短历史: 吃子清零, 用于三次重复判和 (循环不可能跨越吃子点)
     pos_history = [([row[:] for row in board], "r")]
-    # [长将键表] 每方的 (将军前局面签名, src, dst) → 首次记录时的历史锚点索引;
-    # 键第二次出现即触发环检测 (锚点保证环从首次记录算起, 一将一闲里的闲着不会丢)
-    full_history = [([row[:] for row in board], "r")]
-    check_keys = {"r": {}, "b": {}}
     # [配额裁决] 双方连续将军计数器 (吃子不重置, 非将军着才重置)
     trackers = {s: PerpCheckTracker() for s in "rb"}
     result = None         # {"winner": "r"/"b"/None, "reason": str}
@@ -261,7 +239,7 @@ def play(args):
         uci, score, depth, dt, tries = ask_engine(
             engines[side], view, side,
             args.red_think if side == "r" else args.black_think,
-            pos_history=full_history, check_state=trackers[side].state_for())
+            check_state=trackers[side].state_for())
         stats[side]["total"] += dt
         stats[side]["n"] += 1
         stats[side]["max"] = max(stats[side]["max"], dt)
@@ -305,41 +283,28 @@ def play(args):
             result = {"winner": side, "reason": f"第 {ply + 1} 着吃掉 {'將' if side == 'r' else '帥'}, 获胜"}
             break
 
-        # [配额+键表] 更新将军子轨迹 → 判定本着是否将军 → 超额/键重复裁决
+        # [配额裁决] 更新将军子轨迹 → 判定本着是否将军 → 超额判负
         next_side = "b" if side == "r" else "r"
         for s in "rb":
             trackers[s].on_any_move(src, dst, captured != ".")
         if in_check(board, next_side):
             trackers[side].deliver_check(dst)
             if trackers[side].exceeded():
+                n_pieces = len(trackers[side].squares) + trackers[side].retired
                 result = {"winner": next_side,
                           "reason": f"第 {ply + 1} 着后 {SIDE_NAME[side]}方连续将军 "
                                     f"{trackers[side].count} 次, 超过配额 "
-                                    f"(6×{len(trackers[side].squares) + trackers[side].retired} 将军子), 判负"}
+                                    f"(min(3×{n_pieces}, 9)={trackers[side].quota}), 判负"}
                 break
-            # 键表: 键 = (将军前局面, 着法); 第二次出现 → 从锚点起环检测
-            pre_sig = tuple(tuple(r) for r in full_history[-1][0])
-            key = (pre_sig, src, dst)
-            if key in check_keys[side]:
-                anchor = check_keys[side][key]
-                loop = full_history[anchor + 1:] + [([row[:] for row in board], next_side)]
-                adj = adjudicate_long_check(loop, side)
-                if adj is not None:
-                    adj["reason"] = f"第 {ply + 1} 着后: {adj['reason']}"
-                    result = adj
-                    break
-            else:
-                check_keys[side][key] = len(full_history) - 1   # 锚点 = 将军前局面的索引
         else:
             trackers[side].reset()
 
-        # [重复裁决] 记录新局面; 短历史吃子清零重记, 全量历史只增不减
+        # [重复裁决] 记录新局面; 短历史吃子清零重记
         snap = [row[:] for row in board]
         if captured != ".":
             pos_history = [(snap, next_side)]
         else:
             pos_history.append((snap, next_side))
-        full_history.append((snap, next_side))
         cur = pos_history[-1]
         cnt = sum(1 for e in pos_history if e == cur)
         if cnt >= 3:

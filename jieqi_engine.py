@@ -755,16 +755,99 @@ def _update_distribution(engine_board_str):
     sumall = {0: {True: sum(di[0][True][key] for key in di[0][True]), False: sum(di[0][False][key] for key in di[0][False])}}
 
 
-def _flip_board(board):
-    """180° 翻转 10x9 棋盘 (规范棋盘 ↔ 对方视角)。"""
-    return [[board[9 - r][8 - c] for c in range(9)] for r in range(10)]
-
-
 class JieQiEngine:
     def __init__(self):
         self.searcher = Searcher()
         self._cache = {}
         self._cache_count = {}
+        # [v5.8] 实战模式对局记忆 (调用方不下发 check_state 时自维护长将链条):
+        #   _mem_boards[i] = 第 i 个我方回合收到的局面串 (我方视角)
+        #   _mem_moves[i] / _mem_my_checks[i] = 该回合选出的着法 / 是否将军
+        #   _mem_oppo_checks[i] / _mem_oppo_dsts[i] = 导致 boards[i] 的对方着法是否将军 / 其落点
+        self._mem_side = None
+        self._mem_boards = []
+        self._mem_moves = []
+        self._mem_my_checks = []
+        self._mem_oppo_checks = []
+        self._mem_oppo_dsts = []
+
+    def _memory_reset(self):
+        self._mem_boards = []
+        self._mem_moves = []
+        self._mem_my_checks = []
+        self._mem_oppo_checks = []
+        self._mem_oppo_dsts = []
+
+    def _memory_step(self, side, estr):
+        """[v5.9] 新回合收到局面: 校验链条连续性并登记。断链(新对局/漏回合/识别错)
+        则重置; 以位置级 diff 校验 (容忍暗子翻开的字母差异)。
+        TODO: 对方着法的精细判断目前靠位置级 diff 推断, 后续用走子标记视觉识别
+              (直接识别对方走了哪个子) 替换/完善。"""
+        if self._mem_side is not None and self._mem_side != side:
+            self._memory_reset()
+        self._mem_side = side
+        if not self._mem_boards:
+            self._mem_boards.append(estr)
+            self._mem_oppo_checks.append(False)
+            self._mem_oppo_dsts.append(None)
+            return
+        if len(self._mem_boards) > len(self._mem_moves):
+            return                     # 本回合已登记 (同回合重复识别)
+        prev_b = self._mem_boards[-1]
+        src, dst = self._mem_moves[-1]
+        diff = [i for i in range(len(prev_b)) if prev_b[i] != estr[i]]
+        rest = [i for i in diff if i != src and i != dst]
+        # [v5.9] 3格/4格变化完整枚举 (对方着法恰一步, 落点可能在 rest 或与我方格重合):
+        #   4格 (rest==2): rest 一空一占 → 空=对方起点, 占=对方落点;
+        #   3格 (rest==1): 该格必为空(对方起点), 落点落在我方格上:
+        #       A. estr[src] 非空 → 对方占了我方刚空的位, 落点 = src;
+        #       B. estr[src] 为空 → 对方反吃我方落点,     落点 = dst。
+        oppo_dst = None
+        if estr[dst] != ".":
+            if len(rest) == 2 and estr[src] == "." \
+                    and (estr[rest[0]] == ".") != (estr[rest[1]] == "."):
+                oppo_dst = rest[0] if estr[rest[0]] != "." else rest[1]
+            elif len(rest) == 1 and estr[rest[0]] == ".":
+                oppo_dst = src if estr[src] != "." else dst
+        if oppo_dst is None:
+            self._memory_reset()
+            self._mem_side = side
+            self._mem_boards.append(estr)
+            self._mem_oppo_checks.append(False)
+            self._mem_oppo_dsts.append(None)
+            return
+        self._mem_boards.append(estr)
+        self._mem_oppo_checks.append(self._entry_in_check(estr, side, side))
+        self._mem_oppo_dsts.append(oppo_dst)
+
+    def _memory_commit(self, move, pos):
+        """[v5.8] 登记本回合选出的着法及其将军标记。"""
+        self._mem_moves.append(move)
+        self._mem_my_checks.append(self._gives_check(pos, move))
+
+    def _memory_quota_blocks(self, move, cand_chk):
+        """[v5.9] 实战模式配额拦截: 从记忆末尾回溯连续将军段, 候选着将超过
+        min(3×将军子数, 9) 配额 → 返回 True。将军子按轨迹认子, 被吃配额不缩。"""
+        if not cand_chk:
+            return False
+        count = 1
+        marker = move[0]        # 候选将军着走之前, 该子在 src
+        pieces = set()          # 段内其他将军子 (以当时所在格为键)
+        retired = 0
+        for i in range(len(self._mem_moves) - 1, -1, -1):
+            if not self._mem_my_checks[i]:
+                break
+            count += 1
+            src_i, dst_i = self._mem_moves[i]
+            if dst_i == marker:          # 这一步动的是同一个子 → 轨迹前移
+                marker = src_i
+            else:                        # 另一个将军子
+                pieces.add(dst_i)
+            od = self._mem_oppo_dsts[i + 1] if i + 1 < len(self._mem_oppo_dsts) else None
+            if od is not None and od in pieces:   # 对方吃掉了某个将军子
+                pieces.discard(od)
+                retired += 1
+        return count > min(3 * (1 + len(pieces) + retired), 9)
 
     @staticmethod
     def _entry_in_check(board_str, side_to_move, my_side):
@@ -782,57 +865,22 @@ class JieQiEngine:
         child = pos.move(move).rotate()   # 转回我方视角 (大写 = 我方)
         return any(child.board[m[1]] == "k" for m in child.gen_moves())
 
-    def _check_key_table(self, my_side, oppo_side, hist):
-        """[v5.8] 从全量历史推导己方长将键表: (将军前局面串, src, dst) → 锚点索引。
-        着法由相邻历史条目的串差异还原 (一步着法恰有两格差异)。"""
-        keys = {}
-        for j in range(1, len(hist)):
-            bs_prev, _ = hist[j - 1]
-            bs_j, s_j = hist[j]
-            if s_j != oppo_side:          # 轮到对方走 ⟺ 上一着是我方走的
-                continue
-            if not self._entry_in_check(bs_j, s_j, my_side):
-                continue                  # 我方该着不是将军, 不记键
-            diffs = [i for i in range(len(bs_prev)) if bs_prev[i] != bs_j[i]]
-            if len(diffs) != 2:
-                continue
-            a, b = diffs
-            src_i, dst_i = (a, b) if bs_j[a] == "." else (b, a)
-            keys[(bs_prev, src_i, dst_i)] = j - 1   # 锚点 = 将军前局面条目的索引
-        return keys
-
-    def _key_blocks(self, pos, my_side, oppo_side, move, keys, hist):
-        """[v5.8] 键表拦截: move 是将军着且键已在表中 → 从锚点起环检测:
-        环内我方全将且对方不全将(互将豁免) → 会被判长将负, 返回 True。"""
-        key = (pos.board, move[0], move[1])
-        if key not in keys:
-            return False
-        anchor = keys[key]
-        child = pos.move(move)                        # 对方视角
-        # rotate 路径串尾是空格, 历史签名串尾是 '\n', 统一规范化
-        my_view_str = child.board[-2::-1].swapcase() + "\n"
-        loop = hist[anchor + 1:] + [(my_view_str, oppo_side)]
-        my_chks, oppo_chks = [], []
-        for bs, s in loop:
-            mover = my_side if s == oppo_side else oppo_side
-            (my_chks if mover == my_side else oppo_chks).append(
-                self._entry_in_check(bs, s, my_side))
-        return bool(my_chks) and all(my_chks) and not (oppo_chks and all(oppo_chks))
-
     def _quota_blocks(self, pos, my_side, move, check_state, tracked_squares):
-        """[v5.8] 配额拦截: 本着若是将军且将超过配额 6×将军子数, 返回 True。
+        """[v5.9] 配额拦截: 本着若是将军且将超过配额 min(3×将军子数, 9), 返回 True。
         tracked_squares: 已方已参与将军的棋子当前格集合 (引擎视角坐标)。"""
         if self._gives_check(pos, move):
             src_rc = _engine_idx_to_row_col(move[0])
             total = len(tracked_squares) + check_state.get("retired", 0)
             if src_rc not in tracked_squares:
                 total += 1                     # 新将军子加入, 配额同步上调
-            if check_state["count"] + 1 > 6 * total:
+            if check_state["count"] + 1 > min(3 * total, 9):
                 return True
         return False
 
     def get_best_move(self, board, my_side, think_time=2.0, pos_history=None, check_state=None):
-        """返回 (uci_move, score, depth)。uci 为己方视角坐标 (row 0-9, 己方在下)"""
+        """返回 (uci_move, score, depth)。uci 为己方视角坐标 (row 0-9, 己方在下)
+        pos_history: [v5.9 起已废弃] 保留签名仅为向后兼容, 不再使用;
+        check_state: 裁判下发的已方连将计数状态, 缺省 None = 实战模式。"""
         global di, sumall, average
 
         engine_board_str = board_to_engine_string(board, my_side)
@@ -840,43 +888,48 @@ class JieQiEngine:
 
         pos = Position(engine_board_str, 0, True, 0).set()
 
+        # [v5.9] 实战模式: 调用方不下发 check_state 时, 引擎自维护长将链条 (服务端进程常驻)
+        live = check_state is None
+        if live:
+            self._memory_step(my_side, engine_board_str)
+
         if pos.board in kaijuku:
             move = kaijuku[pos.board]
+            if live:
+                self._memory_commit(move, pos)
             return (_engine_idx_to_uci(move[0]) + _engine_idx_to_uci(move[1]), 0, 0)
 
         move, score, depth = self.searcher.search(pos, max_time=think_time)
-        # [v5.8] 长将双安检 (硬逻辑, 搜索无否决权):
-        #   1) 键表拦截: 候选将军着的键 (当前局面, 着法) 已在己方键表中, 且从锚点
-        #      起环检测判我长将 → 没收 (判定与裁判同构, 检测点在自己着法上, 无需前瞻);
-        #   2) 配额拦截: 本着将是超配额的第 N 次连续将军 → 没收。
-        if move is not None and pos_history:
-            hist = []                  # 历史 → 引擎视角签名, 建一次全体候选共用
-            for b, s in pos_history:
-                view = b if my_side == "r" else _flip_board(b)
-                hist.append((board_to_engine_string(view, my_side), s))
-            oppo_side = "b" if my_side == "r" else "r"
-            keys = self._check_key_table(my_side, oppo_side, hist)
-            root_moves = list(pos.gen_moves())
-            bad = set()
-            if keys:
-                for m in root_moves:
-                    if self._gives_check(pos, m) \
-                            and self._key_blocks(pos, my_side, oppo_side, m, keys, hist):
-                        bad.add(m)
-            if check_state:
-                tracked = set()
-                for r, c_ in check_state.get("squares", []):
-                    if my_side == "b":
-                        r, c_ = 9 - r, 8 - c_   # 规范坐标 → 引擎视角
-                    tracked.add((r, c_))
-                for m in root_moves:
-                    if self._quota_blocks(pos, my_side, m, check_state, tracked):
-                        bad.add(m)
-            if move in bad:
-                safe = [m for m in root_moves if m not in bad]
+        # [v5.9] 长将配额安检 (硬逻辑, 搜索无否决权): 本着将是超配额
+        #      (min(3×将军子数, 9)) 的连续将军 → 没收, 改走安全着中单步分最高者。
+        #      裁判模式用裁判下发的 check_state; 实战模式从自维护记忆回溯。
+        if move is not None and check_state:
+            tracked = set()
+            for r, c_ in check_state.get("squares", []):
+                if my_side == "b":
+                    r, c_ = 9 - r, 8 - c_   # 规范坐标 → 引擎视角
+                tracked.add((r, c_))
+            if self._quota_blocks(pos, my_side, move, check_state, tracked):
+                safe = [m for m in pos.gen_moves()
+                        if not self._quota_blocks(pos, my_side, m, check_state, tracked)]
                 if safe:
                     pick = max(safe, key=pos.value)
                     move, score, depth = pick, pos.value(pick), -2   # -2 标识安检兜底
+        elif move is not None and live and len(self._mem_moves) < len(self._mem_boards):
+            # [v5.9] 实战模式安检: 配额拦截 (与裁判同构)
+            cand_chk = self._gives_check(pos, move)
+            if cand_chk and self._memory_quota_blocks(move, cand_chk):
+                safe = []
+                for m in pos.gen_moves():
+                    c = self._gives_check(pos, m)
+                    if c and self._memory_quota_blocks(m, c):
+                        continue
+                    safe.append(m)
+                if safe:
+                    move = max(safe, key=pos.value)
+                    score, depth = pos.value(move), -2   # -2 标识安检兜底
+        if move is not None and live:
+            self._memory_commit(move, pos)
         if move is not None:
             uci = _engine_idx_to_uci(move[0]) + _engine_idx_to_uci(move[1])
             return uci, score, depth

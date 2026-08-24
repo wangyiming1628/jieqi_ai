@@ -1,7 +1,7 @@
 __pycache__/
 *.pyc
 snapshot/
-venv/
+.venv/
 .codebuddy/
 .DS_Store
 engines/mak/classes/

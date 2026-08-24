@@ -1,0 +1,1324 @@
+{
+ "config": {
+  "red": "pypy510",
+  "black": "pypy",
+  "think_time": 1.5,
+  "red_think": 1.5,
+  "black_think": 1.5,
+  "seed": 20260993,
+  "max_ply": 400,
+  "no_cap_draw": 120
+ },
+ "result": {
+  "winner": "b",
+  "reason": "第 62 着吃掉 帥, 获胜"
+ },
+ "stats": {
+  "r": {
+   "total": 35.6767327998532,
+   "n": 31,
+   "max": 1.5492261999752373,
+   "times": [
+    1.336,
+    1.034,
+    0.79,
+    1.082,
+    0.992,
+    1.527,
+    1.53,
+    1.503,
+    1.549,
+    0.783,
+    1.537,
+    1.479,
+    1.506,
+    1.53,
+    1.136,
+    1.501,
+    1.02,
+    1.528,
+    0.78,
+    1.522,
+    1.533,
+    0.85,
+    0.797,
+    1.066,
+    0.579,
+    0.812,
+    1.532,
+    1.521,
+    0.913,
+    0.401,
+    0.009
+   ]
+  },
+  "b": {
+   "total": 34.15759249962866,
+   "n": 31,
+   "max": 1.541796600096859,
+   "times": [
+    1.542,
+    1.339,
+    0.928,
+    0.836,
+    0.872,
+    1.539,
+    0.825,
+    0.675,
+    0.896,
+    1.506,
+    1.484,
+    1.511,
+    1.526,
+    1.394,
+    1.529,
+    1.253,
+    0.615,
+    1.359,
+    1.536,
+    0.895,
+    1.207,
+    1.151,
+    1.503,
+    1.3,
+    1.219,
+    0.713,
+    1.039,
+    1.535,
+    0.425,
+    0.006,
+    0.002
+   ]
+  }
+ },
+ "moves": [
+  {
+   "ply": 1,
+   "side": "r",
+   "uci": "e3e4",
+   "src": [
+    6,
+    4
+   ],
+   "dst": [
+    5,
+    4
+   ],
+   "reveal": "仕",
+   "captured": null,
+   "score": 78,
+   "depth": 5,
+   "time_s": 1.336
+  },
+  {
+   "ply": 2,
+   "side": "b",
+   "uci": "b2b9",
+   "src": [
+    2,
+    7
+   ],
+   "dst": [
+    9,
+    7
+   ],
+   "reveal": "馬",
+   "captured": "r炮",
+   "score": 1.1428571428571388,
+   "depth": 4,
+   "time_s": 1.542
+  },
+  {
+   "ply": 3,
+   "side": "r",
+   "uci": "b2b9",
+   "src": [
+    7,
+    1
+   ],
+   "dst": [
+    0,
+    1
+   ],
+   "reveal": "仕",
+   "captured": "b車",
+   "score": 109.85714285714286,
+   "depth": 5,
+   "time_s": 1.034
+  },
+  {
+   "ply": 4,
+   "side": "b",
+   "uci": "a3a4",
+   "src": [
+    3,
+    8
+   ],
+   "dst": [
+    4,
+    8
+   ],
+   "reveal": "卒",
+   "captured": null,
+   "score": 41.16483516483517,
+   "depth": 5,
+   "time_s": 1.339
+  },
+  {
+   "ply": 5,
+   "side": "r",
+   "uci": "a3a4",
+   "src": [
+    6,
+    0
+   ],
+   "dst": [
+    5,
+    0
+   ],
+   "reveal": "車",
+   "captured": null,
+   "score": 82,
+   "depth": 5,
+   "time_s": 0.79
+  },
+  {
+   "ply": 6,
+   "side": "b",
+   "uci": "c3c4",
+   "src": [
+    3,
+    6
+   ],
+   "dst": [
+    4,
+    6
+   ],
+   "reveal": "車",
+   "captured": null,
+   "score": 2,
+   "depth": 5,
+   "time_s": 0.928
+  },
+  {
+   "ply": 7,
+   "side": "r",
+   "uci": "c3c4",
+   "src": [
+    6,
+    2
+   ],
+   "dst": [
+    5,
+    2
+   ],
+   "reveal": "兵",
+   "captured": null,
+   "score": 36.25,
+   "depth": 5,
+   "time_s": 1.082
+  },
+  {
+   "ply": 8,
+   "side": "b",
+   "uci": "e3e4",
+   "src": [
+    3,
+    4
+   ],
+   "dst": [
+    4,
+    4
+   ],
+   "reveal": "士",
+   "captured": null,
+   "score": 34.75,
+   "depth": 5,
+   "time_s": 0.836
+  },
+  {
+   "ply": 9,
+   "side": "r",
+   "uci": "h2h8",
+   "src": [
+    7,
+    7
+   ],
+   "dst": [
+    1,
+    7
+   ],
+   "reveal": "炮",
+   "captured": null,
+   "score": 14.36363636363636,
+   "depth": 5,
+   "time_s": 0.992
+  },
+  {
+   "ply": 10,
+   "side": "b",
+   "uci": "c4c6",
+   "src": [
+    4,
+    6
+   ],
+   "dst": [
+    6,
+    6
+   ],
+   "reveal": null,
+   "captured": "r相",
+   "score": 60.63636363636364,
+   "depth": 5,
+   "time_s": 0.872
+  },
+  {
+   "ply": 11,
+   "side": "r",
+   "uci": "i0h0",
+   "src": [
+    9,
+    8
+   ],
+   "dst": [
+    9,
+    7
+   ],
+   "reveal": "兵",
+   "captured": "b馬",
+   "score": 9.36363636363636,
+   "depth": 4,
+   "time_s": 1.527
+  },
+  {
+   "ply": 12,
+   "side": "b",
+   "uci": "h2h8",
+   "src": [
+    2,
+    1
+   ],
+   "dst": [
+    8,
+    1
+   ],
+   "reveal": "象",
+   "captured": null,
+   "score": 96.83333333333334,
+   "depth": 4,
+   "time_s": 1.539
+  },
+  {
+   "ply": 13,
+   "side": "r",
+   "uci": "h8h1",
+   "src": [
+    1,
+    7
+   ],
+   "dst": [
+    8,
+    7
+   ],
+   "reveal": null,
+   "captured": null,
+   "score": 1.6666666666666572,
+   "depth": 5,
+   "time_s": 1.53
+  },
+  {
+   "ply": 14,
+   "side": "b",
+   "uci": "g0e2",
+   "src": [
+    0,
+    2
+   ],
+   "dst": [
+    2,
+    4
+   ],
+   "reveal": "馬",
+   "captured": null,
+   "score": -5,
+   "depth": 5,
+   "time_s": 0.825
+  },
+  {
+   "ply": 15,
+   "side": "r",
+   "uci": "h1e1",
+   "src": [
+    8,
+    7
+   ],
+   "dst": [
+    8,
+    4
+   ],
+   "reveal": null,
+   "captured": null,
+   "score": 44,
+   "depth": 5,
+   "time_s": 1.503
+  },
+  {
+   "ply": 16,
+   "side": "b",
+   "uci": "f0e1",
+   "src": [
+    0,
+    3
+   ],
+   "dst": [
+    1,
+    4
+   ],
+   "reveal": "象",
+   "captured": null,
+   "score": -30,
+   "depth": 4,
+   "time_s": 0.675
+  },
+  {
+   "ply": 17,
+   "side": "r",
+   "uci": "a4b4",
+   "src": [
+    5,
+    0
+   ],
+   "dst": [
+    5,
+    1
+   ],
+   "reveal": null,
+   "captured": null,
+   "score": 71.33333333333334,
+   "depth": 5,
+   "time_s": 1.549
+  },
+  {
+   "ply": 18,
+   "side": "b",
+   "uci": "e4f5",
+   "src": [
+    4,
+    4
+   ],
+   "dst": [
+    5,
+    3
+   ],
+   "reveal": null,
+   "captured": null,
+   "score": -76.33333333333334,
+   "depth": 5,
+   "time_s": 0.896
+  },
+  {
+   "ply": 19,
+   "side": "r",
+   "uci": "e4d5",
+   "src": [
+    5,
+    4
+   ],
+   "dst": [
+    4,
+    3
+   ],
+   "reveal": null,
+   "captured": null,
+   "score": 79.0,
+   "depth": 5,
+   "time_s": 0.783
+  },
+  {
+   "ply": 20,
+   "side": "b",
+   "uci": "f5e6",
+   "src": [
+    5,
+    3
+   ],
+   "dst": [
+    6,
+    4
+   ],
+   "reveal": null,
+   "captured": null,
+   "score": -51.33333333333334,
+   "depth": 5,
+   "time_s": 1.506
+  },
+  {
+   "ply": 21,
+   "side": "r",
+   "uci": "a0a6",
+   "src": [
+    9,
+    0
+   ],
+   "dst": [
+    3,
+    0
+   ],
+   "reveal": "兵",
+   "captured": "b炮",
+   "score": 62.33333333333334,
+   "depth": 5,
+   "time_s": 1.537
+  },
+  {
+   "ply": 22,
+   "side": "b",
+   "uci": "e2f4",
+   "src": [
+    2,
+    4
+   ],
+   "dst": [
+    4,
+    3
+   ],
+   "reveal": null,
+   "captured": "r仕",
+   "score": 28.625,
+   "depth": 6,
+   "time_s": 1.484
+  },
+  {
+   "ply": 23,
+   "side": "r",
+   "uci": "b4b1",
+   "src": [
+    5,
+    1
+   ],
+   "dst": [
+    8,
+    1
+   ],
+   "reveal": null,
+   "captured": "b象",
+   "score": 41,
+   "depth": 6,
+   "time_s": 1.479
+  },
+  {
+   "ply": 24,
+   "side": "b",
+   "uci": "c6c9",
+   "src": [
+    6,
+    6
+   ],
+   "dst": [
+    9,
+    6
+   ],
+   "reveal": null,
+   "captured": "r車",
+   "score": 20,
+   "depth": 5,
+   "time_s": 1.511
+  },
+  {
+   "ply": 25,
+   "side": "r",
+   "uci": "b1b5",
+   "src": [
+    8,
+    1
+   ],
+   "dst": [
+    4,
+    1
+   ],
+   "reveal": null,
+   "captured": null,
+   "score": 84.33333333333333,
+   "depth": 5,
+   "time_s": 1.506
+  },
+  {
+   "ply": 26,
+   "side": "b",
+   "uci": "f4d5",
+   "src": [
+    4,
+    3
+   ],
+   "dst": [
+    5,
+    5
+   ],
+   "reveal": null,
+   "captured": null,
+   "score": -60.33333333333333,
+   "depth": 6,
+   "time_s": 1.526
+  },
+  {
+   "ply": 27,
+   "side": "r",
+   "uci": "b0c2",
+   "src": [
+    9,
+    1
+   ],
+   "dst": [
+    7,
+    2
+   ],
+   "reveal": "兵",
+   "captured": null,
+   "score": 92.33333333333333,
+   "depth": 4,
+   "time_s": 1.53
+  },
+  {
+   "ply": 28,
+   "side": "b",
+   "uci": "d5c7",
+   "src": [
+    5,
+    5
+   ],
+   "dst": [
+    7,
+    6
+   ],
+   "reveal": null,
+   "captured": null,
+   "score": 24.5,
+   "depth": 6,
+   "time_s": 1.394
+  },
+  {
+   "ply": 29,
+   "side": "r",
+   "uci": "b5f5",
+   "src": [
+    4,
+    1
+   ],
+   "dst": [
+    4,
+    5
+   ],
+   "reveal": null,
+   "captured": null,
+   "score": -59.5,
+   "depth": 6,
+   "time_s": 1.136
+  },
+  {
+   "ply": 30,
+   "side": "b",
+   "uci": "i0h0",
+   "src": [
+    0,
+    0
+   ],
+   "dst": [
+    0,
+    1
+   ],
+   "reveal": "卒",
+   "captured": "r仕",
+   "score": 65.5,
+   "depth": 5,
+   "time_s": 1.529
+  },
+  {
+   "ply": 31,
+   "side": "r",
+   "uci": "c0a2",
+   "src": [
+    9,
+    2
+   ],
+   "dst": [
+    7,
+    0
+   ],
+   "reveal": "馬",
+   "captured": null,
+   "score": 32,
+   "depth": 6,
+   "time_s": 1.501
+  },
+  {
+   "ply": 32,
+   "side": "b",
+   "uci": "b0c2",
+   "src": [
+    0,
+    7
+   ],
+   "dst": [
+    2,
+    6
+   ],
+   "reveal": "炮",
+   "captured": null,
+   "score": 20,
+   "depth": 6,
+   "time_s": 1.253
+  },
+  {
+   "ply": 33,
+   "side": "r",
+   "uci": "f5f3",
+   "src": [
+    4,
+    5
+   ],
+   "dst": [
+    6,
+    5
+   ],
+   "reveal": null,
+   "captured": null,
+   "score": -55,
+   "depth": 5,
+   "time_s": 1.02
+  },
+  {
+   "ply": 34,
+   "side": "b",
+   "uci": "c2a2",
+   "src": [
+    2,
+    6
+   ],
+   "dst": [
+    2,
+    8
+   ],
+   "reveal": null,
+   "captured": null,
+   "score": 55,
+   "depth": 4,
+   "time_s": 0.615
+  },
+  {
+   "ply": 35,
+   "side": "r",
+   "uci": "a6b6",
+   "src": [
+    3,
+    0
+   ],
+   "dst": [
+    3,
+    1
+   ],
+   "reveal": null,
+   "captured": null,
+   "score": -23,
+   "depth": 5,
+   "time_s": 1.528
+  },
+  {
+   "ply": 36,
+   "side": "b",
+   "uci": "a2a6",
+   "src": [
+    2,
+    8
+   ],
+   "dst": [
+    6,
+    8
+   ],
+   "reveal": null,
+   "captured": "r相",
+   "score": 51,
+   "depth": 6,
+   "time_s": 1.359
+  },
+  {
+   "ply": 37,
+   "side": "r",
+   "uci": "b6c6",
+   "src": [
+    3,
+    1
+   ],
+   "dst": [
+    3,
+    2
+   ],
+   "reveal": null,
+   "captured": "b卒",
+   "score": 28,
+   "depth": 5,
+   "time_s": 0.78
+  },
+  {
+   "ply": 38,
+   "side": "b",
+   "uci": "a6a9",
+   "src": [
+    6,
+    8
+   ],
+   "dst": [
+    9,
+    8
+   ],
+   "reveal": null,
+   "captured": null,
+   "score": 38,
+   "depth": 5,
+   "time_s": 1.536
+  },
+  {
+   "ply": 39,
+   "side": "r",
+   "uci": "c6c7",
+   "src": [
+    3,
+    2
+   ],
+   "dst": [
+    2,
+    2
+   ],
+   "reveal": null,
+   "captured": null,
+   "score": 1,
+   "depth": 4,
+   "time_s": 1.522
+  },
+  {
+   "ply": 40,
+   "side": "b",
+   "uci": "c9b9",
+   "src": [
+    9,
+    6
+   ],
+   "dst": [
+    9,
+    7
+   ],
+   "reveal": null,
+   "captured": "r兵",
+   "score": 253,
+   "depth": 6,
+   "time_s": 0.895
+  },
+  {
+   "ply": 41,
+   "side": "r",
+   "uci": "e1g1",
+   "src": [
+    8,
+    4
+   ],
+   "dst": [
+    8,
+    6
+   ],
+   "reveal": null,
+   "captured": null,
+   "score": -296,
+   "depth": 6,
+   "time_s": 1.533
+  },
+  {
+   "ply": 42,
+   "side": "b",
+   "uci": "b9b6",
+   "src": [
+    9,
+    7
+   ],
+   "dst": [
+    6,
+    7
+   ],
+   "reveal": null,
+   "captured": null,
+   "score": 284,
+   "depth": 6,
+   "time_s": 1.207
+  },
+  {
+   "ply": 43,
+   "side": "r",
+   "uci": "f0e1",
+   "src": [
+    9,
+    5
+   ],
+   "dst": [
+    8,
+    4
+   ],
+   "reveal": "馬",
+   "captured": null,
+   "score": -358.66666666666663,
+   "depth": 7,
+   "time_s": 0.85
+  },
+  {
+   "ply": 44,
+   "side": "b",
+   "uci": "b6b9",
+   "src": [
+    6,
+    7
+   ],
+   "dst": [
+    9,
+    7
+   ],
+   "reveal": null,
+   "captured": null,
+   "score": 246,
+   "depth": 7,
+   "time_s": 1.151
+  },
+  {
+   "ply": 45,
+   "side": "r",
+   "uci": "f3f0",
+   "src": [
+    6,
+    5
+   ],
+   "dst": [
+    9,
+    5
+   ],
+   "reveal": null,
+   "captured": null,
+   "score": -260,
+   "depth": 7,
+   "time_s": 0.797
+  },
+  {
+   "ply": 46,
+   "side": "b",
+   "uci": "c7e8",
+   "src": [
+    7,
+    6
+   ],
+   "dst": [
+    8,
+    4
+   ],
+   "reveal": null,
+   "captured": "r馬",
+   "score": 235,
+   "depth": 5,
+   "time_s": 1.503
+  },
+  {
+   "ply": 47,
+   "side": "r",
+   "uci": "d0e1",
+   "src": [
+    9,
+    3
+   ],
+   "dst": [
+    8,
+    4
+   ],
+   "reveal": "兵",
+   "captured": "b馬",
+   "score": -179.33333333333334,
+   "depth": 6,
+   "time_s": 1.066
+  },
+  {
+   "ply": 48,
+   "side": "b",
+   "uci": "e1c3",
+   "src": [
+    1,
+    4
+   ],
+   "dst": [
+    3,
+    6
+   ],
+   "reveal": null,
+   "captured": null,
+   "score": 304.0,
+   "depth": 6,
+   "time_s": 1.3
+  },
+  {
+   "ply": 49,
+   "side": "r",
+   "uci": "g1f1",
+   "src": [
+    8,
+    6
+   ],
+   "dst": [
+    8,
+    5
+   ],
+   "reveal": null,
+   "captured": null,
+   "score": -260,
+   "depth": 5,
+   "time_s": 0.579
+  },
+  {
+   "ply": 50,
+   "side": "b",
+   "uci": "a9d9",
+   "src": [
+    9,
+    8
+   ],
+   "dst": [
+    9,
+    5
+   ],
+   "reveal": null,
+   "captured": "r車",
+   "score": 287,
+   "depth": 6,
+   "time_s": 1.219
+  },
+  {
+   "ply": 51,
+   "side": "r",
+   "uci": "c4c5",
+   "src": [
+    5,
+    2
+   ],
+   "dst": [
+    4,
+    2
+   ],
+   "reveal": null,
+   "captured": null,
+   "score": -1.0,
+   "depth": 6,
+   "time_s": 0.812
+  },
+  {
+   "ply": 52,
+   "side": "b",
+   "uci": "e6d7",
+   "src": [
+    6,
+    4
+   ],
+   "dst": [
+    7,
+    5
+   ],
+   "reveal": null,
+   "captured": null,
+   "score": 49.0,
+   "depth": 5,
+   "time_s": 0.713
+  },
+  {
+   "ply": 53,
+   "side": "r",
+   "uci": "c5c6",
+   "src": [
+    4,
+    2
+   ],
+   "dst": [
+    3,
+    2
+   ],
+   "reveal": null,
+   "captured": null,
+   "score": -29.0,
+   "depth": 5,
+   "time_s": 1.532
+  },
+  {
+   "ply": 54,
+   "side": "b",
+   "uci": "b9b8",
+   "src": [
+    9,
+    7
+   ],
+   "dst": [
+    8,
+    7
+   ],
+   "reveal": null,
+   "captured": null,
+   "score": 135,
+   "depth": 7,
+   "time_s": 1.039
+  },
+  {
+   "ply": 55,
+   "side": "r",
+   "uci": "f1f9",
+   "src": [
+    8,
+    5
+   ],
+   "dst": [
+    0,
+    5
+   ],
+   "reveal": null,
+   "captured": "b士",
+   "score": -141,
+   "depth": 6,
+   "time_s": 1.521
+  },
+  {
+   "ply": 56,
+   "side": "b",
+   "uci": "d9d0",
+   "src": [
+    9,
+    5
+   ],
+   "dst": [
+    0,
+    5
+   ],
+   "reveal": null,
+   "captured": "r炮",
+   "score": 3696,
+   "depth": 7,
+   "time_s": 1.535
+  },
+  {
+   "ply": 57,
+   "side": "r",
+   "uci": "e0d0",
+   "src": [
+    9,
+    4
+   ],
+   "dst": [
+    9,
+    3
+   ],
+   "reveal": null,
+   "captured": null,
+   "score": -3696,
+   "depth": 9,
+   "time_s": 0.913
+  },
+  {
+   "ply": 58,
+   "side": "b",
+   "uci": "d7e8",
+   "src": [
+    7,
+    5
+   ],
+   "dst": [
+    8,
+    4
+   ],
+   "reveal": null,
+   "captured": "r兵",
+   "score": 3696,
+   "depth": 12,
+   "time_s": 0.425
+  },
+  {
+   "ply": 59,
+   "side": "r",
+   "uci": "d0e0",
+   "src": [
+    9,
+    3
+   ],
+   "dst": [
+    9,
+    4
+   ],
+   "reveal": null,
+   "captured": null,
+   "score": -3696,
+   "depth": 12,
+   "time_s": 0.401
+  },
+  {
+   "ply": 60,
+   "side": "b",
+   "uci": "b8b9",
+   "src": [
+    8,
+    7
+   ],
+   "dst": [
+    9,
+    7
+   ],
+   "reveal": null,
+   "captured": null,
+   "score": 3696,
+   "depth": 12,
+   "time_s": 0.006
+  },
+  {
+   "ply": 61,
+   "side": "r",
+   "uci": "e0e1",
+   "src": [
+    9,
+    4
+   ],
+   "dst": [
+    8,
+    4
+   ],
+   "reveal": null,
+   "captured": "b士",
+   "score": -3696,
+   "depth": 12,
+   "time_s": 0.009
+  },
+  {
+   "ply": 62,
+   "side": "b",
+   "uci": "e0e8",
+   "src": [
+    0,
+    4
+   ],
+   "dst": [
+    8,
+    4
+   ],
+   "reveal": null,
+   "captured": "r帥",
+   "score": 3696,
+   "depth": 12,
+   "time_s": 0.002
+  }
+ ],
+ "final_board": [
+  [
+   ".",
+   "b卒",
+   ".",
+   ".",
+   ".",
+   "b炮",
+   "b?",
+   ".",
+   "b?"
+  ],
+  [
+   ".",
+   ".",
+   ".",
+   ".",
+   ".",
+   ".",
+   ".",
+   ".",
+   "."
+  ],
+  [
+   ".",
+   ".",
+   "r兵",
+   ".",
+   ".",
+   ".",
+   ".",
+   ".",
+   "."
+  ],
+  [
+   ".",
+   ".",
+   "r兵",
+   ".",
+   ".",
+   ".",
+   "b象",
+   ".",
+   "."
+  ],
+  [
+   ".",
+   ".",
+   ".",
+   ".",
+   ".",
+   ".",
+   ".",
+   ".",
+   "b卒"
+  ],
+  [
+   ".",
+   ".",
+   ".",
+   ".",
+   ".",
+   ".",
+   ".",
+   ".",
+   "."
+  ],
+  [
+   ".",
+   ".",
+   ".",
+   ".",
+   ".",
+   ".",
+   ".",
+   ".",
+   "."
+  ],
+  [
+   "r馬",
+   ".",
+   "r兵",
+   ".",
+   ".",
+   ".",
+   ".",
+   ".",
+   "."
+  ],
+  [
+   ".",
+   ".",
+   ".",
+   ".",
+   "b將",
+   ".",
+   ".",
+   ".",
+   "."
+  ],
+  [
+   ".",
+   ".",
+   ".",
+   ".",
+   ".",
+   ".",
+   ".",
+   "b車",
+   "."
+  ]
+ ]
+}

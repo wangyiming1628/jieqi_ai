@@ -507,13 +507,9 @@ class Searcher:
                 self.tp_move[pos] = move
                 return MATE_UPPER
         entry = self.tp_score.get((pos, depth, root), Entry(-MATE_UPPER, MATE_UPPER))
-        # [v5.11] 杀王分豁免: 边界值落在杀王区间 (abs>=MATE_LOWER) 时不参与 TT 截断。
-        #      防止零窗口搜索把别处存的杀王边界当节点值回流, 将无关着法
-        #      染成同分"杀棋" (车六平五送车局复盘定位的传播层 bug)。
-        if entry.lower >= beta and abs(entry.lower) < MATE_LOWER \
-                and (not root or self.tp_move.get(pos) is not None):
+        if entry.lower >= beta and (not root or self.tp_move.get(pos) is not None):
             return entry.lower
-        if entry.upper < alpha and abs(entry.upper) < MATE_LOWER:
+        if entry.upper < alpha:
             return entry.upper
         if nullmove_now and depth > 3 and not root and any(c in pos.board for c in "RNCI"):
             if all(oppo.board[m[1]] != "k" for m in oppo.gen_moves()):

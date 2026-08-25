@@ -39,10 +39,17 @@ class _EngineClientBase:
     def _start(self):
         self._q = queue.Queue()
         cmd = self._launch_cmd()
+        # 子进程环境变量注入 (A/B 消融实验用):
+        #   子类可设 self.extra_env = {"JIEQI_DET_SIDES": "mine", ...}
+        env = None
+        extra = getattr(self, "extra_env", None)
+        if extra:
+            env = dict(os.environ)
+            env.update({str(k): str(v) for k, v in extra.items()})
         self._proc = subprocess.Popen(
             cmd,
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=None,
-            encoding="utf-8", errors="ignore", bufsize=1,
+            encoding="utf-8", errors="ignore", bufsize=1, env=env,
         )
         self._reader_thread = threading.Thread(target=self._reader, args=(self._proc,), daemon=True)
         self._reader_thread.start()
@@ -175,12 +182,15 @@ class JavaEngineClient(_EngineClientBase):
 class PypyEngineClient(_EngineClientBase):
     """miaosiSari 纯算法引擎 (PyPy 优先, 回退 CPython)。"""
 
-    def __init__(self, prefer_pypy=True, server_path=None):
+    def __init__(self, prefer_pypy=True, server_path=None, extra_env=None):
         super().__init__()
         # server_path 可指定引擎服务端脚本: 默认原版 engine_server.py;
         # 优化版 (TT保留+双时限) 传 engine_server_v2.py
+        # extra_env: 注入子进程环境变量, 用于 A/B 消融实验时切换引擎旋钮
+        #            (例: {"JIEQI_DET_SIDES": "mine"}); 引擎无对应 setter 时静默忽略
         self.server_path = server_path or os.path.join(self.base_dir, "engine_server.py")
         self.prefer_pypy = prefer_pypy
+        self.extra_env = extra_env or {}
         self.python_bin = self._pick_interpreter()
         self.runtime_label = "PyPy" if "pypy" in os.path.basename(self.python_bin).lower() else "CPython"
         self._start()

@@ -23,9 +23,26 @@ def _log(msg):
 
 def main(engine_module="jieqi_engine"):
     """engine_module: 引擎模块名。默认原版 jieqi_engine; 优化版 (TT保留+双时限) 传 jieqi_engine_v2。"""
-    engine = importlib.import_module(engine_module).JieQiEngine()
+    mod = importlib.import_module(engine_module)
+    # 可选环境变量: 引擎旋钮注入 (A/B 消融实验用)。
+    #   引擎若提供对应 setter 才生效, 否则静默忽略 —— 这样同一份服务端可以驱动
+    #   不同版本的引擎, 无需为每个实验分支改服务端。
+    #   目前约定的旋钮 (见各特性分支):
+    #     JIEQI_DETERMINIZE=weighted|pessimistic  -> set_determinize_mode
+    #     JIEQI_DET_SIDES=both|mine|oppo          -> set_determinize_sides
+    _knobs = (("JIEQI_DETERMINIZE", "set_determinize_mode"),
+              ("JIEQI_DET_SIDES", "set_determinize_sides"))
+    _applied = []
+    for _env, _setter in _knobs:
+        _val = os.environ.get(_env)
+        if _val and hasattr(mod, _setter):
+            getattr(mod, _setter)(_val)
+            _applied.append(f"{_setter.split('_', 1)[1]}={_val}")
+    engine = mod.JieQiEngine()
     runtime = "PyPy" if hasattr(sys, "pypy_version_info") else "CPython"
-    _log(f"[engine_server] 就绪 ({runtime} {sys.version.split()[0]}, engine={engine_module})")
+    _extra = (", " + ", ".join(_applied)) if _applied else ""
+    _log(f"[engine_server] 就绪 ({runtime} {sys.version.split()[0]}, "
+         f"engine={engine_module}{_extra})")
 
     # JIT 预热 (PyPy 首次搜索有编译开销，先跑一次让热点编译)
     try:

@@ -19,16 +19,6 @@
           叶节点静态分 = pos.score + 空头炮分差, 与原口径一致。
           叶节点变尖使 α-β 剪枝增多 (depth 6 提速 2.6×), 10 局等墙钟对局
           净胜上一版 3 局 (5-2-3) 且平均用时不增。
-  优化 4 (v5.12 P0): 暗子池跨回合跟踪 (正确性修复)。原 _update_distribution 从
-          当前盘面反推暗子池, 把"被吃掉的明子"也算回池里 (被吃的明子同样不在
-          盘面上) → 中残局暗车/暗炮概率虚高, 评估失真。实测回放全部棋谱 8197
-          个局面, 违反不变量 "sum(池) == 盘面朝下子数" 的比例 99%, 最坏时引擎
-          认为自己池里有 10 子而盘面只剩 1 子朝下。
-          改为 DarkPoolTracker: 事件驱动维护 rev_ever[类型] (翻开可观测 → 精确
-          扣减; 暗着被吃类型不可观测 → 按比例缩放, 即无信息条件下的贝叶斯边缘),
-          再精确重标定使不变量按构造成立。裁判/实战两种模式均启用。
-          实测平均 L1 池误差 5.748 → 1.268 (降低 78%), 弥合了与信息论上界
-          (1.081) 之间 96% 的差距; 不变量满足率 99% → 100%。
 """
 import re, os, time, json
 from itertools import count
@@ -749,201 +739,25 @@ def board_to_engine_string(board, my_side):
 
 
 def _update_distribution(engine_board_str):
-    """[已废弃, 仅保留供旧测试/工具调用] 从当前盘面反推暗子池。
-
-    此函数存在结构性错误 (v5.12 P0 修复的对象): 它假设"不在盘面上的明子仍在暗子池里",
-    但被吃掉的明子同样不在盘面上 → 被错误计回暗子池。实测 (回放 tools/games 全部棋谱,
-    8197 个局面) 违反不变量 sum(池) == 盘面朝下子数 的比例达 99%, 最坏时引擎认为
-    自己池里有 10 子而盘面只剩 1 子朝下。
-
-    正确做法见 DarkPoolTracker: 暗子池是跨回合状态, 原理上无法从单帧盘面恢复
-    (被吃掉的明子曾经翻开过, 这个事实只存在于历史中)。
-
-    新代码请使用 DarkPoolTracker; 本函数改为等价的一次性重标定 (不做类型推断,
-    仅按初始比例缩放到正确的池大小), 以免旧调用点拿到违反不变量的分布。
-    """
+    """根据引擎棋盘字符串更新 di 分布"""
     global r, b, di, sumall
-    tracker = DarkPoolTracker()
-    tracker.observe(engine_board_str)
-    tracker.apply(engine_board_str)
+    r = {"R": 2, "N": 2, "B": 2, "A": 2, "C": 2, "P": 5}
+    b = {"r": 2, "n": 2, "b": 2, "a": 2, "c": 2, "p": 5}
 
+    for i in range(51, 204):
+        p = engine_board_str[i]
+        if p in "RNBAKCP":
+            r[p] = max(0, r.get(p, 0) - 1)
+        elif p in "rnbakcp":
+            k = p.upper()
+            b[p] = max(0, b.get(p, 0) - 1)
+        elif p == "U":
+            pass
+        elif p == "u":
+            pass
 
-# ---------------------------------------------------------------------------
-# [v5.12 P0] 暗子池跨回合跟踪
-# ---------------------------------------------------------------------------
-#
-# 问题: 暗子池 (每方 15 个朝下的子各是什么类型) 是跨回合状态。每个子恰好以两种
-#       方式离开池子: ① 被走动 → 翻开, 类型公开; ② 仍朝下时被吃 → 类型永不公开。
-#       旧实现从当前盘面反推, 把"被吃掉的明子"也算回池里, 中残局严重失真。
-#
-# 解法: 事件驱动地维护 rev_ever[T] = "类型 T 至今被翻开过几个", 再用一次精确
-#       重标定把池缩放到 sum(池) == 盘面朝下子数。
-#
-#   - 翻开事件可观测 → 直接扣减对应类型 (信息完全利用)
-#   - 暗着被吃不可观测 → 按比例缩放, 保持类型比例不变。这正是"无类型信息条件下
-#     的贝叶斯边缘分布", 而非权宜之计: 若一个未知类型的子离开了池子, 在没有任何
-#     区分信息时, 每种类型按其当前占比承担这次损失。
-#
-# 不变量 (硬约束, 单元测试逐局面断言): sum(pool) == 盘面朝下子数
-#   由 apply() 的重标定按构造保证, 因此即便着法历史断链 (新对局/漏回合/识别错),
-#   池大小也永远正确 —— 只是类型比例退化回"按剩余先验", 不会出现幽灵暗车。
-#
-# 实测 (回放 tools/games 全部 4157 个我方回合观测):
-#   平均 L1 池误差  v5.11 = 5.748  →  P0 = 1.268  (降低 78.0%)
-#   与"全知者"上界 (1.081, 受限于暗着被吃的类型不可观测) 相比, P0 弥合了 96% 的差距
-#   不变量满足率 99% → 100%
-#
-DARK_UPPER = "DEFGHI"          # 我方朝下子 (按初始格走法的暗子字母)
-DARK_LOWER = "defghi"          # 对方朝下子
-LIGHT_UPPER = "RNBACP"         # 我方已翻开的明子 (不含 K: 帥/將 从不入池)
-LIGHT_LOWER = "rnbacp"         # 对方已翻开的明子 (不含 k)
-POOL_INIT = {"R": 2, "N": 2, "B": 2, "A": 2, "C": 2, "P": 5}   # 每方入池 15 子
-
-
-class DarkPoolTracker:
-    """暗子池跨回合跟踪器 (每个 JieQiEngine 实例一个, 双方各一份池)。
-
-    rev[True]  = {类型: 我方至今翻开过的个数}
-    rev[False] = {类型: 对方至今翻开过的个数}
-
-    调用协议 (get_best_move 内部已接好, 两种模式一致):
-        observe(estr)          我方回合收到局面 → 结算上一轮双方的翻开事件
-        apply(estr)            把池写入全局 di/sumall 供评估使用
-        commit(move)           登记我方本回合着法 (下次 observe 时用于定位翻开)
-    """
-
-    __slots__ = ("rev", "_prev", "_my_move", "stats")
-
-    def __init__(self):
-        self.rev = {True: {}, False: {}}
-        self._prev = None            # 上一次观测到的局面串
-        self._my_move = None         # 在 _prev 上走出的我方着法
-        # 诊断计数 (单元测试与实战日志用, 不参与评估)
-        self.stats = {"own_revealed": 0, "own_lost": 0, "oppo_revealed": 0,
-                      "chain_breaks": 0, "floor_bumps": 0, "resets": 0}
-
-    # ---------------- 内部工具 ----------------
-    def _bump(self, mine, t):
-        """登记一次翻开事件 (类型 t 已归一为大写); 封顶在初始个数。"""
-        cur = self.rev[mine].get(t, 0)
-        if cur < POOL_INIT.get(t, 0):
-            self.rev[mine][t] = cur + 1
-            return True
-        return False
-
-    def _floor(self, estr):
-        """单调下界: 翻开过的个数不可能少于当前盘面可见的同类明子数。
-
-        这是断链兜底 —— 即使漏掉了翻开事件 (识别错/漏回合/换对局), 只要那个子
-        还在盘面上就能被重新计入。注意方向: 只上调不下调, 因为明子被吃后会从盘面
-        消失, 但"曾被翻开"这个事实永久成立 (正是旧实现搞错的地方)。
-        """
-        for mine, light in ((True, LIGHT_UPPER), (False, LIGHT_LOWER)):
-            seen = {}
-            for i in range(51, 204):
-                ch = estr[i]
-                if ch in light:
-                    t = ch.upper()
-                    seen[t] = seen.get(t, 0) + 1
-            for t, n in seen.items():
-                if self.rev[mine].get(t, 0) < n:
-                    self.rev[mine][t] = min(n, POOL_INIT.get(t, n))
-                    self.stats["floor_bumps"] += 1
-
-    @staticmethod
-    def _locate_oppo_move(prev, estr, src, dst):
-        """从两次观测的位置级 diff 复原对方着法 (src/dst 为我方上一着)。
-
-        枚举与 _memory_step 同构 (对方着法恰一步, 落点可能与我方格重合):
-            4 格变化 (rest==2): rest 一空一占 → 空=对方起点, 占=对方落点
-            3 格变化 (rest==1): 该格必为对方起点, 落点落在我方格上
-        返回 (oppo_src, oppo_dst) 或 (None, None)。
-        """
-        if estr[dst] == ".":
-            return None, None          # 我方落点空了 → diff 无法唯一归因
-        rest = [i for i in range(51, 204)
-                if prev[i] != estr[i] and i != src and i != dst]
-        if len(rest) == 2 and estr[src] == "." \
-                and (estr[rest[0]] == ".") != (estr[rest[1]] == "."):
-            if estr[rest[0]] != ".":
-                return rest[1], rest[0]
-            return rest[0], rest[1]
-        if len(rest) == 1 and estr[rest[0]] == ".":
-            return rest[0], (src if estr[src] != "." else dst)
-        return None, None
-
-    # ---------------- 对外接口 ----------------
-    def reset(self):
-        """新对局 (或换边): 池回到初始先验。"""
-        self.rev = {True: {}, False: {}}
-        self._prev = None
-        self._my_move = None
-        self.stats["resets"] += 1
-
-    def observe(self, estr):
-        """我方回合收到新局面: 结算自上次观测以来双方的翻开事件。
-
-        时序说明: 我方暗子走动的那一刻并不知道翻出了什么 (引擎只在自己回合看盘面),
-        真身在下一次观测时才读到 —— 若期间被对方吃掉则永远读不到, 记入 own_lost,
-        由 apply() 的重标定吸收 (等价于一次未知类型的离池)。
-        """
-        if self._prev is not None and self._my_move is not None:
-            prev, (src, dst) = self._prev, self._my_move
-            # ① 我方上一着若走的是暗子 → 现在读它的真身
-            if prev[src] in DARK_UPPER:
-                if estr[dst] in LIGHT_UPPER:
-                    self._bump(True, estr[dst])
-                    self.stats["own_revealed"] += 1
-                else:
-                    self.stats["own_lost"] += 1      # 已被吃, 真身不可知
-            # ② 对方上一着若走的是暗子 → 读它的真身
-            o_src, o_dst = self._locate_oppo_move(prev, estr, src, dst)
-            if o_dst is None:
-                self.stats["chain_breaks"] += 1
-            elif prev[o_src] in DARK_LOWER and estr[o_dst] in LIGHT_LOWER:
-                self._bump(False, estr[o_dst].upper())
-                self.stats["oppo_revealed"] += 1
-        self._floor(estr)
-        self._prev = estr
-        self._my_move = None
-
-    def commit(self, move):
-        """登记我方本回合选定的着法 (供下次 observe 定位翻开事件)。"""
-        self._my_move = move
-
-    def pool(self, estr, mine):
-        """返回 mine 方的暗子池 {类型: 期望个数(float)}。
-
-        保证 sum(返回值) == 盘面上该方朝下子数 (不变量, 由重标定按构造成立)。
-        """
-        dark = DARK_UPPER if mine else DARK_LOWER
-        n_dark = 0
-        for i in range(51, 204):
-            if estr[i] in dark:
-                n_dark += 1
-        if n_dark <= 0:
-            return {t: 0.0 for t in POOL_INIT}
-        base = {t: POOL_INIT[t] - self.rev[mine].get(t, 0) for t in POOL_INIT}
-        for t in base:
-            if base[t] < 0:
-                base[t] = 0
-        total = sum(base.values())
-        if total <= 0:
-            # 矛盾兜底 (识别错导致翻开数超上限): 退回初始先验比例
-            base, total = dict(POOL_INIT), sum(POOL_INIT.values())
-        scale = n_dark / total
-        return {t: base[t] * scale for t in POOL_INIT}
-
-    def apply(self, estr):
-        """把双方池写入全局 di/sumall (评估与 calc_average 的输入)。"""
-        global r, b, di, sumall
-        mine = self.pool(estr, True)
-        oppo = self.pool(estr, False)
-        r = dict(mine)
-        b = {t.lower(): v for t, v in oppo.items()}
-        di = {0: {True: dict(r), False: dict(b)}}
-        sumall = {0: {True: sum(r.values()), False: sum(b.values())}}
-        return di
+    di = {0: {True: deepcopy(r), False: deepcopy(b)}}
+    sumall = {0: {True: sum(di[0][True][key] for key in di[0][True]), False: sum(di[0][False][key] for key in di[0][False])}}
 
 
 class JieQiEngine:
@@ -961,10 +775,6 @@ class JieQiEngine:
         self._mem_my_checks = []
         self._mem_oppo_checks = []
         self._mem_oppo_dsts = []
-        # [v5.12 P0] 暗子池跨回合跟踪器。与长将记忆不同, 它在裁判模式下同样必须工作
-        #            (评估正确性与谁维护长将链条无关), 故不受 live 开关约束。
-        self._pool = DarkPoolTracker()
-        self._pool_side = None
 
     def _memory_reset(self):
         self._mem_boards = []
@@ -1079,16 +889,7 @@ class JieQiEngine:
         global di, sumall, average
 
         engine_board_str = board_to_engine_string(board, my_side)
-
-        # [v5.12 P0] 暗子池跨回合跟踪 (取代 _update_distribution 的单帧反推)。
-        #   换边/新对局 → 重置; 随后结算上一轮翻开事件并把池写入 di/sumall。
-        #   两种模式 (裁判 / 实战) 都走这条路径: 池的正确性是评估正确性问题,
-        #   与长将链条由谁维护无关。
-        if self._pool_side is not None and self._pool_side != my_side:
-            self._pool.reset()
-        self._pool_side = my_side
-        self._pool.observe(engine_board_str)
-        self._pool.apply(engine_board_str)
+        _update_distribution(engine_board_str)
 
         pos = Position(engine_board_str, 0, True, 0).set()
 
@@ -1101,7 +902,6 @@ class JieQiEngine:
             move = kaijuku[pos.board]
             if live:
                 self._memory_commit(move, pos)
-            self._pool.commit(move)
             return (_engine_idx_to_uci(move[0]) + _engine_idx_to_uci(move[1]), 0, 0)
 
         move, score, depth = self.searcher.search(pos, max_time=think_time)
@@ -1136,8 +936,6 @@ class JieQiEngine:
         if move is not None and live:
             self._memory_commit(move, pos)
         if move is not None:
-            # [v5.12 P0] 登记本回合着法, 供下次 observe 定位我方翻开事件
-            self._pool.commit(move)
             uci = _engine_idx_to_uci(move[0]) + _engine_idx_to_uci(move[1])
             return uci, score, depth
         return None, 0, 0

@@ -31,7 +31,8 @@ def main(engine_module="jieqi_engine"):
     #     JIEQI_DETERMINIZE=weighted|pessimistic  -> set_determinize_mode
     #     JIEQI_DET_SIDES=both|mine|oppo          -> set_determinize_sides
     _knobs = (("JIEQI_DETERMINIZE", "set_determinize_mode"),
-              ("JIEQI_DET_SIDES", "set_determinize_sides"))
+              ("JIEQI_DET_SIDES", "set_determinize_sides"),
+              ("JIEQI_RISK_LAMBDA", "set_risk_lambda"))
     _applied = []
     for _env, _setter in _knobs:
         _val = os.environ.get(_env)

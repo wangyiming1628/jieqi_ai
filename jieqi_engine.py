@@ -393,10 +393,14 @@ class Position(namedtuple("Position", "board score turn version")):
             else:
                 if q != "U":
                     score += average[self.version][not self.turn][False]
+                    if RISK_LAMBDA:
+                        score -= RISK_LAMBDA * risk_sigma[self.version][not self.turn][False]
                     if q == "I":
                         score += 10
                 else:
                     score += average[self.version][not self.turn][True][k]
+                    if RISK_LAMBDA:
+                        score -= RISK_LAMBDA * risk_sigma[self.version][not self.turn][True][k]
                     if j >> 4 == 7 and j & 1 == 1:
                         score += 10
                 if q == "D":
@@ -606,6 +610,8 @@ class Searcher:
     def search(self, pos, max_time=2.0):
         self.nodes = 0
         self.calc_average()
+        if RISK_LAMBDA:
+            self.calc_variance()
         pos.set()
         # [v2] TT/历史表只在每次搜索开始时清一次 (原先每层迭代都清, 上层成果全部作废)
         self.tp_score = {}
@@ -691,6 +697,56 @@ class Searcher:
         average[version] = deepcopy(self.average)
         return self.average
 
+    def calc_variance(self, version=0):
+        """[v5.13 风险惩罚] 解析计算暗子池标准差 (与 calc_average 同结构、同口径:
+        既算未翻开暗子的粗粒度标量 σ(对应 average[False] 的 pst["1"] 口径),
+        也算已翻开 U 子的逐位置 σ(对应 average[True][i]))。多一次遍历求二阶矩,
+        无需采样/无需重复搜索。用于给"用确定资源换不确定收益"的吃暗子/U 着法定价
+        风险: 均值-方差效用 CE = E[X] - λ·σ(X), 比 PIMC 的蒙特卡洛重搜索更直接命中
+        "方差本身"这个量, 且零额外算力开销。风险随池收窄自动衰减到 0
+        (单一类型时方差为 0, 无需额外衰减系数)。"""
+        numr = sum(di[version][True][key] for key in di[version][True])
+        numb = sum(di[version][False][key] for key in di[version][False])
+        discount_factor = common.discount_factor
+        sigmacoveredr, sigmacoveredb = 0, 0
+        sigmar, sigmab = {}, {}
+
+        if numr == 0:
+            for i in range(51, 204):
+                sigmar[i] = 0
+        else:
+            meanc = self.average[True][False]
+            varc = 0
+            for key in di[version][True]:
+                varc += di[version][True][key] * (pst["1"][key] / discount_factor - meanc) ** 2
+            sigmacoveredr = (varc / numr) ** 0.5
+            for i in range(51, 204):
+                mean = self.average[True][True][i]
+                var = 0
+                for key in di[version][True]:
+                    var += di[version][True][key] * (pst[key][i] - mean) ** 2
+                sigmar[i] = (var / numr) ** 0.5
+
+        if numb == 0:
+            for i in range(51, 204):
+                sigmab[i] = 0
+        else:
+            meanc = self.average[False][False]
+            varc = 0
+            for key in di[version][False]:
+                varc += di[version][False][key] * (pst["1"][key.swapcase()] / discount_factor - meanc) ** 2
+            sigmacoveredb = (varc / numb) ** 0.5
+            for i in range(51, 204):
+                mean = self.average[False][True][i]
+                var = 0
+                for key in di[version][False]:
+                    var += di[version][False][key] * (pst[key.swapcase()][i] - mean) ** 2
+                sigmab[i] = (var / numb) ** 0.5
+
+        self.risk_sigma = {True: {False: sigmacoveredr, True: sigmar}, False: {False: sigmacoveredb, True: sigmab}}
+        risk_sigma[version] = deepcopy(self.risk_sigma)
+        return self.risk_sigma
+
 
 # 全局状态
 r = {"R": 2, "N": 2, "B": 2, "A": 2, "C": 2, "P": 5}
@@ -699,7 +755,21 @@ di = {0: {True: deepcopy(r), False: deepcopy(b)}}
 sumall = {0: {True: sum(di[0][True][key] for key in di[0][True]), False: sum(di[0][False][key] for key in di[0][False])}}
 pst = deepcopy(common.pst)
 average = {0: {}}
+risk_sigma = {0: {}}
 kaijuku = deepcopy(library.kaijuku)
+
+# ---------------- [v5.13] 确定性方差风险惩罚 (Variance-Adjusted Certainty Equivalent) ----------------
+# 动机: PIMC (根重采样+K世界投票) 实测负结果 (见 tools/PIMC_report_20260826.md) ——
+#   蒙特卡洛去逼近方差既贵(4×算力)又不准(K=4方差发散), 且丢了基线的调参经验项。
+#   这里改用解析二阶矩: calc_variance() 与 calc_average() 同一遍历一次算出池标准差,
+#   零额外搜索开销。只对"用确定资源博不确定收益"的唯一场景 (吃对方暗子/U) 生效:
+#   score += E[X] - λ·σ(X)，λ=0 时与基线 byte-for-byte 等价。
+RISK_LAMBDA = 0.0
+
+
+def set_risk_lambda(v):
+    global RISK_LAMBDA
+    RISK_LAMBDA = float(v) if v else 0.0
 
 
 def _row_col_to_engine_idx(row, col):

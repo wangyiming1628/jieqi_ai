@@ -265,6 +265,41 @@ def save_manual_snapshot(recognizer):
     return p_full
 
 
+def _prune_snapshots(sd, pattern, keep=120):
+    """保留最近 keep 个匹配文件, 删除更早的, 避免长局对战撑爆磁盘。"""
+    import glob
+    fs = sorted(glob.glob(os.path.join(sd, pattern)))
+    for old in fs[:-keep]:
+        try:
+            os.remove(old)
+        except OSError:
+            pass
+
+
+def save_recognition_frame(full_img, board_img, board_str, my_side):
+    """保存每次用于棋盘识别的截图(全屏+棋盘裁剪)及识别结果文本, 供排查是否截图模糊/动画残影。
+    文件名带毫秒时间戳, 与 debug_recog_* / manual_* 区分开 (frame_*)。
+    """
+    sd = os.path.join(os.path.dirname(os.path.abspath(__file__)), "snapshot")
+    os.makedirs(sd, exist_ok=True)
+    ts = time.strftime("%Y%m%d_%H%M%S_%f")[:-3]
+    saved = []
+    if full_img is not None:
+        p = os.path.join(sd, f"frame_full_{ts}.png")
+        cv2.imencode(".png", full_img)[1].tofile(p)
+        saved.append(p)
+    p = os.path.join(sd, f"frame_board_{ts}.png")
+    cv2.imencode(".png", board_img)[1].tofile(p)
+    saved.append(p)
+    pt = os.path.join(sd, f"frame_{ts}.txt")
+    with open(pt, "w") as f:
+        f.write(f"my_side={my_side}\n\n{board_str}\n")
+    saved.append(pt)
+    for pat in ("frame_full_*.png", "frame_board_*.png", "frame_*.txt"):
+        _prune_snapshots(sd, pat, keep=120)
+    print(f"[*] 识别帧已保存: {p}" + (f" (全屏: {saved[0]})" if len(saved) > 1 else ""))
+
+
 def _manual_capture_thread(recognizer):
     """后台监听手动截图热键: Windows 按 s 键, macOS 按回车。"""
     if os.name == "nt":
@@ -329,6 +364,8 @@ def main():
                 t0 = time.perf_counter()
                 board = recognizer.detect(board_img, my_side=my_side)
                 t_detect = time.perf_counter() - t0
+                # 保存本次用于识别的每一帧截图(全屏+棋盘裁剪+结果文本), 供排查是否截图模糊/动画残影
+                #save_recognition_frame(full_img, board_img, recognizer.board_to_string(board), my_side)
                 tm = dict(recognizer.last_timings)
 
                 # 识别后更新阵营：己方半场 row 5-9，看帥/將在哪个半场

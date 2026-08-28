@@ -200,6 +200,10 @@ def make_engine(kind):
         server = os.path.join(REPO, "engine_server_risk.py")
         return PypyEngineClient(prefer_pypy=True, server_path=server), \
             "pypy_risk (v5.12 + 确定性方差风险惩罚, λ=0.5)"
+    if kind == "pypy513":
+        server = os.path.join(REPO, "engine_server_v513.py")
+        return PypyEngineClient(prefer_pypy=True, server_path=server), \
+            "pypy513 (v5.13 基线, main: P0 暗子池已修 + 风险惩罚默认关, 不可变 Position)"
     return PypyEngineClient(prefer_pypy=True), "pypy (miaosiSari 原版, alpha-beta)"
 
 

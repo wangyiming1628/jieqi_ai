@@ -1,0 +1,27 @@
+[MISMATCH] seed=1000 side=r n=7
+   move view (3, 4)->(3, 3): engine gives_check=True, referee=False
+   move view (3, 4)->(3, 5): engine gives_check=True, referee=False
+   move view (8, 4)->(8, 5): engine gives_check=True, referee=False
+   move view (8, 4)->(8, 6): engine gives_check=True, referee=False
+   move view (8, 4)->(8, 7): engine gives_check=True, referee=False
+[MISMATCH] seed=1001 side=r n=3
+   move view (8, 4)->(7, 5): engine gives_check=True, referee=False
+   move view (8, 6)->(0, 6): engine gives_check=False, referee=True
+   move view (8, 6)->(8, 5): engine gives_check=True, referee=False
+[MISMATCH] seed=1001 side=b n=1
+   move view (4, 4)->(4, 3): engine gives_check=False, referee=True
+[MISMATCH] seed=1002 side=r n=2
+   move view (1, 8)->(0, 8): engine gives_check=False, referee=True
+   move view (3, 0)->(0, 0): engine gives_check=False, referee=True
+[MISMATCH] seed=1003 side=r n=1
+   move view (7, 3)->(1, 3): engine gives_check=False, referee=True
+[MISMATCH] seed=1003 side=b n=1
+   move view (8, 4)->(8, 5): engine gives_check=True, referee=False
+[MISMATCH] seed=1004 side=r n=2
+   move view (8, 6)->(8, 5): engine gives_check=False, referee=True
+   move view (9, 4)->(8, 4): engine gives_check=True, referee=False
+[MISMATCH] seed=1004 side=b n=2
+   move view (3, 5)->(1, 6): engine gives_check=False, referee=True
+   move view (3, 5)->(2, 3): engine gives_check=False, referee=True
+
+完成: 测试局面 800, 漏判/误判总数 2665

@@ -1,0 +1,90 @@
+[MISMATCH] seed=1031 side=r n=1
+   move view (6, 4)->(5, 4): engine gives_check=False, referee=True
+[MISMATCH] seed=1048 side=r n=1
+   move view (7, 7)->(0, 7): engine gives_check=False, referee=True
+[MISMATCH] seed=1049 side=r n=1
+   move view (6, 4)->(5, 4): engine gives_check=False, referee=True
+[MISMATCH] seed=1050 side=r n=1
+   move view (9, 6)->(7, 4): engine gives_check=False, referee=True
+[MISMATCH] seed=1052 side=r n=1
+   move view (9, 6)->(7, 4): engine gives_check=False, referee=True
+[MISMATCH] seed=1059 side=r n=1
+   move view (6, 4)->(5, 4): engine gives_check=False, referee=True
+[MISMATCH] seed=1065 side=r n=1
+   move view (6, 4)->(5, 4): engine gives_check=False, referee=True
+[MISMATCH] seed=1065 side=b n=1
+   move view (9, 7)->(8, 5): engine gives_check=False, referee=True
+[MISMATCH] seed=1066 side=r n=2
+   move view (6, 4)->(5, 4): engine gives_check=False, referee=True
+   move view (7, 7)->(0, 7): engine gives_check=False, referee=True
+[MISMATCH] seed=1086 side=r n=1
+   move view (6, 4)->(5, 4): engine gives_check=False, referee=True
+[MISMATCH] seed=1093 side=r n=1
+   move view (6, 4)->(5, 4): engine gives_check=False, referee=True
+[MISMATCH] seed=1101 side=b n=1
+   move view (7, 1)->(0, 1): engine gives_check=False, referee=True
+[MISMATCH] seed=1115 side=r n=1
+   move view (6, 4)->(5, 4): engine gives_check=False, referee=True
+[MISMATCH] seed=1132 side=b n=1
+   move view (6, 4)->(5, 4): engine gives_check=False, referee=True
+[MISMATCH] seed=1157 side=r n=1
+   move view (9, 5)->(8, 4): engine gives_check=False, referee=True
+[MISMATCH] seed=1158 side=b n=1
+   move view (6, 4)->(5, 4): engine gives_check=False, referee=True
+[MISMATCH] seed=1159 side=r n=1
+   move view (9, 7)->(8, 5): engine gives_check=False, referee=True
+[MISMATCH] seed=1166 side=r n=1
+   move view (6, 4)->(5, 4): engine gives_check=False, referee=True
+[MISMATCH] seed=1192 side=r n=1
+   move view (9, 1)->(8, 3): engine gives_check=False, referee=True
+[MISMATCH] seed=1192 side=b n=1
+   move view (9, 5)->(8, 4): engine gives_check=False, referee=True
+[MISMATCH] seed=1194 side=r n=1
+   move view (6, 4)->(5, 4): engine gives_check=False, referee=True
+[MISMATCH] seed=1199 side=r n=1
+   move view (6, 4)->(5, 4): engine gives_check=False, referee=True
+[MISMATCH] seed=1199 side=b n=1
+   move view (7, 7)->(0, 7): engine gives_check=False, referee=True
+[MISMATCH] seed=1204 side=b n=1
+   move view (6, 4)->(5, 4): engine gives_check=False, referee=True
+[MISMATCH] seed=1215 side=b n=1
+   move view (9, 7)->(8, 5): engine gives_check=False, referee=True
+[MISMATCH] seed=1218 side=r n=2
+   move view (6, 4)->(5, 4): engine gives_check=False, referee=True
+   move view (9, 2)->(7, 4): engine gives_check=False, referee=True
+[MISMATCH] seed=1218 side=b n=1
+   move view (9, 6)->(7, 4): engine gives_check=False, referee=True
+[MISMATCH] seed=1229 side=r n=1
+   move view (6, 4)->(5, 4): engine gives_check=False, referee=True
+[MISMATCH] seed=1229 side=b n=1
+   move view (6, 4)->(5, 4): engine gives_check=False, referee=True
+[MISMATCH] seed=1233 side=b n=1
+   move view (6, 4)->(5, 4): engine gives_check=False, referee=True
+[MISMATCH] seed=1234 side=r n=1
+   move view (6, 4)->(5, 4): engine gives_check=False, referee=True
+[MISMATCH] seed=1242 side=b n=1
+   move view (6, 4)->(5, 4): engine gives_check=False, referee=True
+[MISMATCH] seed=1245 side=b n=1
+   move view (6, 4)->(5, 4): engine gives_check=False, referee=True
+[MISMATCH] seed=1258 side=b n=1
+   move view (6, 4)->(5, 4): engine gives_check=False, referee=True
+[MISMATCH] seed=1273 side=b n=1
+   move view (9, 2)->(7, 4): engine gives_check=False, referee=True
+[MISMATCH] seed=1300 side=r n=1
+   move view (7, 7)->(0, 7): engine gives_check=False, referee=True
+[MISMATCH] seed=1303 side=r n=1
+   move view (6, 4)->(5, 4): engine gives_check=False, referee=True
+[MISMATCH] seed=1304 side=r n=1
+   move view (6, 4)->(5, 4): engine gives_check=False, referee=True
+[MISMATCH] seed=1310 side=r n=1
+   move view (6, 4)->(5, 4): engine gives_check=False, referee=True
+[MISMATCH] seed=1322 side=b n=1
+   move view (6, 4)->(5, 4): engine gives_check=False, referee=True
+[MISMATCH] seed=1325 side=b n=1
+   move view (6, 4)->(5, 4): engine gives_check=False, referee=True
+[MISMATCH] seed=1373 side=b n=1
+   move view (6, 4)->(5, 4): engine gives_check=False, referee=True
+[MISMATCH] seed=1383 side=b n=1
+   move view (6, 4)->(5, 4): engine gives_check=False, referee=True
+
+完成: 测试局面 800, 漏判/误判总数 45

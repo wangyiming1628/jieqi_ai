@@ -1,0 +1,196 @@
+python : [engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+所在位置 行:1 字符: 1
++ python tools/run_paired.py --new pypy --old pypy514 --pairs 20 --thin ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([engine_server]...e=jieqi_engine):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+[engine_server] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+python : [engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+所在位置 行:1 字符: 1
++ python tools/run_paired.py --new pypy --old pypy514 --pairs 20 --thin ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([engine_server]...e=jieqi_engine):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+[engine_server] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server_v514] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine_v514)
+[engine_server_v514] 棰勭儹瀹屾垚
+[engine_server] 灏辩华 (PyPy 3.11.13, engine=jieqi_engine)
+[engine_server] 棰勭儹瀹屾垚

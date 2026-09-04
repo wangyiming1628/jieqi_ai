@@ -875,8 +875,6 @@ class Searcher:
         king_ch = "k" if st.stm else "K"
         raw_moves = list(st.gen_moves())
         killer = self.tp_move.get(self._mv_key(st))
-        if killer is not None and killer not in raw_moves:
-            killer = None
         # 先检查杀棋
         for move in [killer] + raw_moves if killer else raw_moves:
             if move is not None and bd[move[1]] == king_ch:
@@ -1031,9 +1029,6 @@ class Searcher:
             move = self.tp_move.get(self._mv_key(st))
             if move is not None:
                 best_move, best_depth, best_score = move, 2, root_val   # 同报根值绝对分
-        if best_move is not None and best_move not in st.gen_moves():
-            legal = list(st.gen_moves())
-            best_move = legal[0] if legal else best_move
         return best_move, best_score, best_depth
 
     def calc_average(self, version=0):
@@ -1465,26 +1460,12 @@ class JieQiEngine:
         """[v5.8] 走 move 后对方是否被将军 (直接吃王不算将军)。
 
         [v5.14 适配] 用 st.make/unmake 替代旧的 pos.move().rotate()。
-        [修正] 暗子('U'/'u')揭晓前引擎不知其真身, 裁判按真实兵种判将; 故对暗子首着
-        穷举所有可能真身(R/N/B/A/C/P), 任一可将军即判将军(只多判不漏判)。
         """
         king_ch = "k" if st.stm else "K"
         if st.board[move[1]] == king_ch:
             return False
-        p = st.board[move[0]]
-        if p in ("U", "u"):
-            for t in "RNBACP":
-                st.board[move[0]] = t if p == "U" else t.lower()
-                st.make(move[0], move[1])
-                chk = st.can_capture_king(st.stm)
-                st.unmake()
-                if chk:
-                    st.board[move[0]] = p
-                    return True
-            st.board[move[0]] = p
-            return False
-        st.make(move[0], move[1])
-        chk = st.can_capture_king(st.stm)
+        st.make(move[0], move[1])   # make 内部翻 stm, 现在 stm 指向原对方
+        chk = st.can_capture_king(st.stm)   # 走完这一步的对方(原对方)能否吃我方王
         st.unmake()
         return chk
 
@@ -1564,14 +1545,6 @@ class JieQiEngine:
                 if safe:
                     move = max(safe, key=lambda m: st.value(m[0], m[1]))
                     score, depth = st.value(move[0], move[1]), -2   # -2 标识安检兜底
-        if move is not None:
-            # 终检: 搜索/配额逻辑中的 make/unmake 可能使 st 状态漂移, 导致 move 被改写
-            # 成非法着法。用不变的 engine_board_str 重建全新 State 做最终合法性校验,
-            # 非法则回退到该局面的首个合法着法 (绝不产生裁判可判非法的着法)。
-            fresh = State.from_string(engine_board_str)
-            if move not in fresh.gen_moves():
-                legal = list(fresh.gen_moves())
-                move = legal[0] if legal else None
         if move is not None and live:
             self._memory_commit(move, st)
         if move is not None:

@@ -731,20 +731,24 @@ class Position:
 
     def rotate(self):
         """旧 Position.rotate: 翻转 board+swapcase+取反 score+取反 turn+重算 set。
-        等价于 State.from_string(estr, stm=False, turn=False) —— 但要从当前
-        真实状态 (已走过一些着法的) 切到对方视角, 不能丢历史, 所以走 from_string
-        + flip_stm 的组合。
+
+        [修正] 初版垫片只翻了 stm/turn, 没有翻盘面, 与旧实现不等价: 旋转后
+        gen_moves() 生成的仍是原阵营的着法, 于是 referee.in_check 的判据
+        `board[m[1]] == "k"` 变成在问"对方能否吃到自己的将" —— 恒为 False。
+        后果是裁判的连将配额永远不累计、长将判负从不触发, 所有"规则零判负"
+        的对局结论都因此失去意义。这里补回真正的翻盘 + swapcase。
+
+        语义: 切到对方视角后, 对方成为"大写/行棋方", 换边由 swapcase 承担,
+        故 stm 保持不变、turn 取反。增量统计不可沿用旧值 (swapcase 后上下/
+        明暗计数互换), 一律用 from_string 重算, 与旧 set() 等价。
         """
-        new = State(list(self._st.board), not self._st.stm, not self._st.turn, self._st.version)
-        new.rough = self._st.rough
-        new.che_u, new.che_l = self._st.che_u, self._st.che_l
-        new.zu_u, new.zu_l = self._st.zu_u, self._st.zu_l
-        new.cov_u, new.cov_l = self._st.cov_u, self._st.cov_l
-        new.back_u, new.back_l = self._st.back_u, self._st.back_l
-        new.rnci_u = dict(self._st.rnci_u)
-        new.rnci_l = dict(self._st.rnci_l)
-        new.kt_u, new.kt_l = self._st.kt_u, self._st.kt_l
-        new.kts_u, new.kts_l = self._st.kts_u, self._st.kts_l
+        bd = self._st.board
+        # 旧写法 board[-2::-1].swapcase() + " ": 索引 i -> 254-i, 逐字符换大小写;
+        # 末位 255 是补位空格, 不参与翻转。
+        flipped = "".join(bd[254 - i].swapcase() for i in range(255)) + " "
+        new = State.from_string(flipped, self._st.version)
+        new.stm = self._st.stm
+        new.turn = not self._st.turn
         new.score = -self._st.score
         new.hkey = self._st.hkey ^ Z_STM ^ Z_TURN
         return Position._from_state(new)
@@ -1154,6 +1158,14 @@ LIGHT_UPPER = "RNBACP"         # 我方已翻开的明子 (不含 K: 帥/將 从
 LIGHT_LOWER = "rnbacp"         # 对方已翻开的明子 (不含 k)
 POOL_INIT = {"R": 2, "N": 2, "B": 2, "A": 2, "C": 2, "P": 5}   # 每方入池 15 子
 
+# [长将] 走子后会变成 U 的字母: 暗子 (DEFGHI/defghi) 首着, 以及搜索树内已揭晓
+#        但真身未知的 U/u。State.make() 会把它们写成 U, 而 gen_moves /
+#        can_capture_king 一律跳过 U。揭棋里绝大多数着法都是暗子首着, 若不穷举
+#        可能真身, 这类将军会被整棵漏判, 长将配额永远攒不起来。
+U_AFTER_MOVE = frozenset("DEFGHIUdefghiu")
+# 暗子/揭晓子可能的真身 (帥將不入池, 故不含 K); 只多判不漏判
+REVEAL_TYPES = "RNBACP"
+
 
 class DarkPoolTracker:
     """暗子池跨回合跟踪器 (每个 JieQiEngine 实例一个, 双方各一份池)。
@@ -1423,27 +1435,37 @@ class JieQiEngine:
 
     def _memory_quota_blocks(self, move, cand_chk):
         """[v5.9] 实战模式配额拦截: 从记忆末尾回溯连续将军段, 候选着将超过
-        min(3×将军子数, 9) 配额 → 返回 True。将军子按轨迹认子, 被吃配额不缩。"""
+        min(3×将军子数, 9) 配额 → 返回 True。将军子按轨迹认子, 被吃配额不缩。
+
+        [修正] 将军子按轨迹认子 (与裁判 PerpCheckTracker / _quota_blocks 对齐)。
+        原实现只对候选着的那个子做轨迹前移 (marker), 段内其余将军子按"当时落点
+        格子"塞进 set —— 同一个子从多个格子轮流照将会被记成多个将军子, 配额由
+        3 虚高到 9, 恰好放过最典型的"单车沿横线来回照将"长将形态。改为正向重放
+        段内着法, 用 squares(将军子当前所在格)逐着更新, 口径与裁判侧一致。"""
         if not cand_chk:
             return False
-        count = 1
-        marker = move[0]        # 候选将军着走之前, 该子在 src
-        pieces = set()          # 段内其他将军子 (以当时所在格为键)
-        retired = 0
-        for i in range(len(self._mem_moves) - 1, -1, -1):
-            if not self._mem_my_checks[i]:
-                break
+        n = len(self._mem_moves)
+        start = n
+        while start > 0 and self._mem_my_checks[start - 1]:
+            start -= 1                 # 连续将军段起点 (前一着非将军则停)
+        squares = {}                   # 将军子当前所在格 -> True (按轨迹更新)
+        retired = 0                    # 照过将但已被吃掉的子数 (配额只增不减)
+        count = 0
+        for k in range(start, n):
+            src, dst = self._mem_moves[k]
+            if src in squares:         # 某个将军子移动了 → 按轨迹更新所在格
+                del squares[src]
+            squares[dst] = True        # 本着照将, 纳入将军子
             count += 1
-            src_i, dst_i = self._mem_moves[i]
-            if dst_i == marker:          # 这一步动的是同一个子 → 轨迹前移
-                marker = src_i
-            else:                        # 另一个将军子
-                pieces.add(dst_i)
-            od = self._mem_oppo_dsts[i + 1] if i + 1 < len(self._mem_oppo_dsts) else None
-            if od is not None and od in pieces:   # 对方吃掉了某个将军子
-                pieces.discard(od)
+            od = self._mem_oppo_dsts[k + 1] if k + 1 < len(self._mem_oppo_dsts) else None
+            if od is not None and od in squares:   # 对方吃掉了某个将军子
+                del squares[od]
                 retired += 1
-        return count > min(3 * (1 + len(pieces) + retired), 9)
+        count += 1                     # 加上候选着本身
+        total = len(squares) + retired
+        if move[0] not in squares:     # 候选子是新的将军子 → 配额同步上调
+            total += 1
+        return count > min(3 * total, 9)
 
     def _entry_in_check(self, board_str, side_to_move, my_side):
         """[v5.8] 引擎串局面中, side_to_move 一方是否正被将军。
@@ -1460,12 +1482,36 @@ class JieQiEngine:
         """[v5.8] 走 move 后对方是否被将军 (直接吃王不算将军)。
 
         [v5.14 适配] 用 st.make/unmake 替代旧的 pos.move().rotate()。
+
+        [修正 1] 语义反转。can_capture_king(side) 是"side 能否吃掉对方王", 而
+            make() 后 stm 已指向对方, 原写法 can_capture_king(st.stm) 算的是
+            "我方走完是否被将军" —— 与函数名/用途恰好相反。实测: 照将着返回
+            False, 送将着返回 True。对合法着法几乎恒为 False, 于是长将安检被
+            `if cand_chk and ...` 短路跳过, 整条防线形同虚设。改为 not st.stm。
+        [修正 2] 暗子首着漏判。暗子 (DEFGHI) 与已揭晓未明真身的 U 子走完后会
+            被写成 U, 而 gen_moves/can_capture_king 一律跳过 U, 其将军完全不可
+            见。揭棋绝大多数着法都是暗子首着, 漏判面积极大。改为对源子穷举可
+            能真身 (RNBACP), 只多判不漏判 —— 误判只让引擎偏保守, 漏判则直接
+            长将判负。
         """
         king_ch = "k" if st.stm else "K"
         if st.board[move[1]] == king_ch:
             return False
-        st.make(move[0], move[1])   # make 内部翻 stm, 现在 stm 指向原对方
-        chk = st.can_capture_king(st.stm)   # 走完这一步的对方(原对方)能否吃我方王
+        src, dst = move
+        p = st.board[src]
+        if p in U_AFTER_MOVE:
+            upper = p.isupper()
+            for t in REVEAL_TYPES:
+                st.board[src] = t if upper else t.lower()
+                st.make(src, dst)
+                chk = st.can_capture_king(not st.stm)
+                st.unmake()
+                st.board[src] = p            # unmake 只还原到临时真身, 需还原原字母
+                if chk:
+                    return True
+            return False
+        st.make(src, dst)                      # make 内部翻 stm, 现在 stm 指向对方
+        chk = st.can_capture_king(not st.stm)  # 我方(刚走完的一方)能否吃对方王
         st.unmake()
         return chk
 
@@ -1517,6 +1563,16 @@ class JieQiEngine:
             return (_engine_idx_to_uci(move[0]) + _engine_idx_to_uci(move[1]), 0, 0)
 
         move, score, depth = self.searcher.search(st, max_time=think_time)
+        # [v5.14 修正] search() 在硬时限 SearchTimeout 触发时用裸 break 退出迭代,
+        # 递归栈上的 make()/flip_stm() 不回滚, st 会停留在半路状态 (实测 undo
+        # 残留、盘面漂移数格)。安检与记忆提交都依赖 st 的 board/stm/增量统计,
+        # 必须在干净状态上进行: 用初始局面串重建。同时对返回着法做合法性兜底。
+        st = State.from_string(engine_board_str)
+        if move is not None and move not in set(st.gen_moves()):
+            legal = list(st.gen_moves())
+            if legal:
+                move = max(legal, key=lambda m: st.value(m[0], m[1]))
+                score, depth = st.value(move[0], move[1]), -1   # -1 标识脏态兜底
         # [v5.9] 长将配额安检 (硬逻辑, 搜索无否决权): 本着将是超配额
         #      (min(3×将军子数, 9)) 的连续将军 → 没收, 改走安全着中单步分最高者。
         #      裁判模式用裁判下发的 check_state; 实战模式从自维护记忆回溯。

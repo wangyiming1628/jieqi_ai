@@ -42,7 +42,7 @@
           "差一步看不见" 的败局会相应减少。设计细节与对拍方法学见
           tools/MAKE_UNMAKE_notes_20260827.md。
 """
-import re, os, time, json, random
+import re, os, sys, time, json, random
 from itertools import count
 from collections import namedtuple
 from copy import deepcopy
@@ -1418,6 +1418,9 @@ class JieQiEngine:
             elif len(rest) == 1 and estr[rest[0]] == ".":
                 oppo_dst = src if estr[src] != "." else dst
         if oppo_dst is None:
+            print(f"[长将] 记忆链断裂重置 (prev->curr diff 无法归因对方着法, "
+                  f"diff格数={len(diff)} rest格数={len(rest)})",
+                  file=sys.stderr, flush=True)
             self._memory_reset()
             self._mem_side = side
             self._mem_boards.append(estr)
@@ -1603,6 +1606,10 @@ class JieQiEngine:
                     score, depth = st.value(move[0], move[1]), -2   # -2 标识安检兜底
         if move is not None and live:
             self._memory_commit(move, st)
+        if live:
+            print(f"[长将] my_checks={self._mem_my_checks} depth={depth} "
+                  f"boards={len(self._mem_boards)} moves={len(self._mem_moves)}",
+                  file=sys.stderr, flush=True)
         if move is not None:
             # [v5.12 P0] 登记本回合着法, 供下次 observe 定位我方翻开事件
             self._pool.commit(move)

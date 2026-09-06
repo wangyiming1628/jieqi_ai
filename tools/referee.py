@@ -204,6 +204,10 @@ def make_engine(kind):
         server = os.path.join(REPO, "engine_server_v513.py")
         return PypyEngineClient(prefer_pypy=True, server_path=server), \
             "pypy513 (v5.13 基线, main: P0 暗子池已修 + 风险惩罚默认关, 不可变 Position)"
+    if kind == "pypy515":
+        server = os.path.join(REPO, "engine_server_v515.py")
+        return PypyEngineClient(prefer_pypy=True, server_path=server), \
+            "pypy515 (v5.14+长将修复, 方案A前基线: 长将被拦走 1 层贪心)"
     return PypyEngineClient(prefer_pypy=True), "pypy (miaosiSari 原版, alpha-beta)"
 
 

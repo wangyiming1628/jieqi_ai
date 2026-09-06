@@ -785,8 +785,6 @@ class Searcher:
         self.check_interval = 2048
         # [v3] 静态搜索递归层数上限 (吃子着法链; 防止互吃序列无限拉长)
         self.qs_depth = 8
-        # [长将·方案A] 根节点被禁着法集: 长将拦截后的二次搜索排除超配额将军着法; 正常搜索为空
-        self.forbid = frozenset()
         # 平均/方差缓存: calc_average/variance 写入, value() 读取
         self.average = {0: {}}
         self.risk_sigma = {0: {}}
@@ -881,17 +879,11 @@ class Searcher:
         king_ch = "k" if st.stm else "K"
         raw_moves = list(st.gen_moves())
         killer = self.tp_move.get(self._mv_key(st))
-        # 先检查杀棋 (用完整着法列表: 即便被禁的着法若是直接吃王也允许)
+        # 先检查杀棋
         for move in [killer] + raw_moves if killer else raw_moves:
             if move is not None and bd[move[1]] == king_ch:
                 self.tp_move[self._mv_key(st)] = move
                 return MATE_UPPER
-        # [长将·方案A] 根节点排除被禁着法 (长将拦截后的二次搜索用); 非根/正常搜索不生效
-        search_moves = raw_moves
-        if root and self.forbid:
-            search_moves = [m for m in raw_moves if m not in self.forbid]
-            if killer is not None and killer in self.forbid:
-                killer = None
         key = self._tt_key(st, depth, root)
         entry = self.tp_score.get(key, Entry(-MATE_UPPER, MATE_UPPER))
         # [v5.11] 杀王分豁免: 边界值落在杀王区间 (abs>=MATE_LOWER) 时不参与 TT 截断。
@@ -910,7 +902,7 @@ class Searcher:
         nullmove_now = nullmove
         if depth == 0:
             return self.qsearch(st, alpha, beta, self.qs_depth)
-        moves = self._order_moves(st, search_moves, killer)
+        moves = self._order_moves(st, raw_moves, killer)
         best = -MATE_UPPER
         mvBest = None
         move_idx = 0
@@ -1538,28 +1530,6 @@ class JieQiEngine:
                 return True
         return False
 
-    def _re_search_avoiding(self, st, think_time, forbid):
-        """[长将·方案A] 排除 forbid 中的根着法重新搜索, 返回 (move, score, depth)。
-
-        替代原先的 1 层贪心兜底: 让搜索引擎在剩余合法着法里找真正的次优着,
-        而非 st.value 单步静态分。二次搜索失败(超时/全部被禁)时退回安全着中
-        单步分最高者; forbid 为空或确无安全着时返回 (None, 0, 0)。
-        """
-        if not forbid:
-            return None, 0, 0
-        self.searcher.forbid = frozenset(forbid)
-        try:
-            mv, sc, dp = self.searcher.search(st, max_time=think_time)
-        finally:
-            self.searcher.forbid = frozenset()
-        if mv is not None:
-            return mv, sc, dp
-        safe = [m for m in st.gen_moves() if m not in forbid]
-        if safe:
-            pick = max(safe, key=lambda m: st.value(m[0], m[1]))
-            return pick, st.value(pick[0], pick[1]), -2   # -2 标识安检兜底
-        return None, 0, 0
-
     def get_best_move(self, board, my_side, think_time=2.0, pos_history=None, check_state=None):
         """返回 (uci_move, score, depth)。uci 为己方视角坐标 (row 0-9, 己方在下)
         pos_history: [v5.9 起已废弃] 保留签名仅为向后兼容, 不再使用;
@@ -1595,9 +1565,7 @@ class JieQiEngine:
             self._pool.commit(move)
             return (_engine_idx_to_uci(move[0]) + _engine_idx_to_uci(move[1]), 0, 0)
 
-        t_search = time.time()
         move, score, depth = self.searcher.search(st, max_time=think_time)
-        elapsed = time.time() - t_search
         # [v5.14 修正] search() 在硬时限 SearchTimeout 触发时用裸 break 退出迭代,
         # 递归栈上的 make()/flip_stm() 不回滚, st 会停留在半路状态 (实测 undo
         # 残留、盘面漂移数格)。安检与记忆提交都依赖 st 的 board/stm/增量统计,
@@ -1609,11 +1577,8 @@ class JieQiEngine:
                 move = max(legal, key=lambda m: st.value(m[0], m[1]))
                 score, depth = st.value(move[0], move[1]), -1   # -1 标识脏态兜底
         # [v5.9] 长将配额安检 (硬逻辑, 搜索无否决权): 本着将是超配额
-        #      (min(3×将军子数, 9)) 的连续将军 → 没收。原先被拦后走 1 层贪心
-        #      (st.value 单步静态分), 棋力掉档; 现改为排除超配额将军着法后用
-        #      剩余预算重新搜索, 兜底着法从"单步贪心"提升到"完整搜索"。
+        #      (min(3×将军子数, 9)) 的连续将军 → 没收, 改走安全着中单步分最高者。
         #      裁判模式用裁判下发的 check_state; 实战模式从自维护记忆回溯。
-        rethink = max(0.5, think_time - elapsed)
         if move is not None and check_state:
             tracked = set()
             for r, c_ in check_state.get("squares", []):
@@ -1621,18 +1586,24 @@ class JieQiEngine:
                     r, c_ = 9 - r, 8 - c_
                 tracked.add((r, c_))
             if self._quota_blocks(st, my_side, move, check_state, tracked):
-                forbid = {m for m in list(st.gen_moves())
-                          if self._quota_blocks(st, my_side, m, check_state, tracked)}
-                move, score, depth = self._re_search_avoiding(st, rethink, forbid)
+                safe = [m for m in st.gen_moves()
+                        if not self._quota_blocks(st, my_side, m, check_state, tracked)]
+                if safe:
+                    pick = max(safe, key=lambda m: st.value(m[0], m[1]))
+                    move, score, depth = pick, st.value(pick[0], pick[1]), -2   # -2 标识安检兜底
         elif move is not None and live and len(self._mem_moves) < len(self._mem_boards):
             # [v5.9] 实战模式安检: 配额拦截 (与裁判同构)
             cand_chk = self._gives_check(st, move)
             if cand_chk and self._memory_quota_blocks(move, cand_chk):
-                forbid = {m for m in list(st.gen_moves())
-                          if self._gives_check(st, m) and self._memory_quota_blocks(m, True)}
-                move, score, depth = self._re_search_avoiding(st, rethink, forbid)
-        # 二次搜索可能再次污染 st, 提交记忆前重建干净状态
-        st = State.from_string(engine_board_str)
+                safe = []
+                for m in st.gen_moves():
+                    c = self._gives_check(st, m)
+                    if c and self._memory_quota_blocks(m, c):
+                        continue
+                    safe.append(m)
+                if safe:
+                    move = max(safe, key=lambda m: st.value(m[0], m[1]))
+                    score, depth = st.value(move[0], move[1]), -2   # -2 标识安检兜底
         if move is not None and live:
             self._memory_commit(move, st)
         if live:

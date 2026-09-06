@@ -10,7 +10,7 @@ MY_BOX_X1, MY_BOX_Y1 = 2708, 1461
 MY_BOX_X2, MY_BOX_Y2 = 2867, 1617
 CROP_W, CROP_H = (1529, 1695) if sys.platform == "darwin" else (1035, 1143)
 
-# 引擎选择: "pypy" = miaosiSari(alpha-beta, 默认) / "java" = Makinuohara(expectiminimax)
+# 引擎选择: "pypy" = miaosiSari(alpha-beta)
 ENGINE_TYPE = "pypy"
 
 PIECE_NAME = {
@@ -332,7 +332,7 @@ def main():
     # 手动截图热键监听 (守护线程, 不阻塞主循环)
     threading.Thread(target=_manual_capture_thread, args=(recognizer,), daemon=True).start()
 
-    # 揭棋引擎, 跑在独立子进程中。ENGINE_TYPE 选择 miaosiSari(PyPy) 或 Makinuohara(Java)
+    # 揭棋引擎, 跑在独立子进程中 (miaosiSari, PyPy 加速)
     try:
         from engine_client import create_engine
         jieqi_engine = create_engine(ENGINE_TYPE, prefer_pypy=True)

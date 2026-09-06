@@ -2,12 +2,10 @@
 揭棋引擎裁判程序 - 让两个引擎完整对局一局, 汇报双方用时与对局胜负
 
 用法:
-  python tools/referee.py                          # java(红) vs pypy(黑), 每着 1.0s
-  python tools/referee.py --red pypy --black java  # 交换先后手
-  python tools/referee.py --red pypy2 --black pypy # 优化版(TT保留+双时限) vs 原版
+  python tools/referee.py                          # pypy(红) vs pypy(黑), 每着 1.0s
   python tools/referee.py --think-time 0.5 --seed 42
-  # 等墙钟时间对局: 双方单独指定思考预算 (原版软超时会超标, 优化版硬上限不会)
-  python tools/referee.py --red pypy2 --red-think 2.5 --black pypy --black-think 1.0
+  # 双方单独指定思考预算:
+  python tools/referee.py --red pypy --red-think 2.5 --black pypy --black-think 1.0
 
 设计:
   - 裁判维护真实棋盘: 暗子真身随机洗牌后只有裁判知道, 引擎只收到公共视野(暗子显示为 ?),
@@ -24,7 +22,7 @@ import sys, os, time, json, random, argparse
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO)
 
-from engine_client import JavaEngineClient, PypyEngineClient  # noqa: E402
+from engine_client import PypyEngineClient  # noqa: E402
 from jieqi_engine import (  # noqa: E402
     Position, board_to_engine_string, _row_col_to_engine_idx,
 )
@@ -169,46 +167,10 @@ class PerpCheckTracker:
                 "retired": self.retired}
 
 
-def make_engine(kind):
-    if kind == "java":
-        return JavaEngineClient(), "java (Makinuohara, expectiminimax)"
-    if kind == "pypy2":
-        server = os.path.join(REPO, "engine_server_v2.py")
-        return PypyEngineClient(prefer_pypy=True, server_path=server), \
-            "pypy2 (miaosiSari 优化版: TT保留+双时限)"
-    if kind == "pypy3":
-        server = os.path.join(REPO, "engine_server_v3.py")
-        return PypyEngineClient(prefer_pypy=True, server_path=server), \
-            "pypy3 (v5.6 基线+真静态搜索)"
-    if kind == "pypy57":
-        server = os.path.join(REPO, "engine_server_v57.py")
-        return PypyEngineClient(prefer_pypy=True, server_path=server), \
-            "pypy57 (v5.7 基线, 无重复感知)"
-    if kind == "pypy510":
-        server = os.path.join(REPO, "engine_server_v510.py")
-        return PypyEngineClient(prefer_pypy=True, server_path=server), \
-            "pypy510 (v5.10 基线, U冻结未修)"
-    if kind == "pypy511":
-        server = os.path.join(REPO, "engine_server_v511.py")
-        return PypyEngineClient(prefer_pypy=True, server_path=server), \
-            "pypy511 (v5.11 基线, 暗子池 bug 未修)"
-    if kind == "pypy512":
-        server = os.path.join(REPO, "engine_server_v512.py")
-        return PypyEngineClient(prefer_pypy=True, server_path=server), \
-            "pypy512 (v5.12 基线, P0 暗子池已修)"
-    if kind == "pypy_risk":
-        server = os.path.join(REPO, "engine_server_risk.py")
-        return PypyEngineClient(prefer_pypy=True, server_path=server), \
-            "pypy_risk (v5.12 + 确定性方差风险惩罚, λ=0.5)"
-    if kind == "pypy513":
-        server = os.path.join(REPO, "engine_server_v513.py")
-        return PypyEngineClient(prefer_pypy=True, server_path=server), \
-            "pypy513 (v5.13 基线, main: P0 暗子池已修 + 风险惩罚默认关, 不可变 Position)"
-    if kind == "pypy515":
-        server = os.path.join(REPO, "engine_server_v515.py")
-        return PypyEngineClient(prefer_pypy=True, server_path=server), \
-            "pypy515 (v5.14+长将修复, 方案A前基线: 长将被拦走 1 层贪心)"
-    return PypyEngineClient(prefer_pypy=True), "pypy (miaosiSari 原版, alpha-beta)"
+def make_engine(kind="pypy"):
+    if kind != "pypy":
+        raise ValueError(f"未知引擎 kind: {kind} (旧版本引擎已随清理移除, 仅支持 pypy)")
+    return PypyEngineClient(prefer_pypy=True), "pypy (miaosiSari, alpha-beta)"
 
 
 def ask_engine(engine, view, side, think_time, check_state=None):
@@ -394,9 +356,9 @@ def report(args, board, records, stats, result, wall):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="揭棋引擎裁判: java vs pypy 完整对局")
-    ap.add_argument("--red", choices=["java", "pypy", "pypy2", "pypy3", "pypy57", "pypy510", "pypy511", "pypy512"], default="java", help="红方引擎 (默认 java)")
-    ap.add_argument("--black", choices=["java", "pypy", "pypy2", "pypy3", "pypy57", "pypy510", "pypy511", "pypy512"], default="pypy", help="黑方引擎 (默认 pypy)")
+    ap = argparse.ArgumentParser(description="揭棋引擎裁判: pypy vs pypy 完整对局")
+    ap.add_argument("--red", choices=["pypy"], default="pypy", help="红方引擎 (默认 pypy)")
+    ap.add_argument("--black", choices=["pypy"], default="pypy", help="黑方引擎 (默认 pypy)")
     ap.add_argument("--think-time", type=float, default=1.0, help="双方每着思考秒数 (默认 1.0)")
     ap.add_argument("--red-think", type=float, default=None, help="红方每着思考秒数 (缺省用 --think-time)")
     ap.add_argument("--black-think", type=float, default=None, help="黑方每着思考秒数 (缺省用 --think-time)")

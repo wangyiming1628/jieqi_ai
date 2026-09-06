@@ -16,9 +16,9 @@
       (只改变个位数百分比的决策) 测不出显著性属预期, 不要据此宣称"有提升"。
 
 用法:
-    python tools/run_paired.py --new pypy --old pypy512 --pairs 10
-    # 消融实验: 用环境变量切换引擎旋钮 (需 referee 侧提供对应 kind)
-    python tools/run_paired.py --new pypy --old pypy511 --pairs 10 --tag p0-recheck
+    python tools/run_paired.py --pairs 10
+    # 指定基线 kind (需 referee.make_engine 支持, 旧版本引擎已随清理移除):
+    python tools/run_paired.py --new pypy --old pypy --pairs 10
 """
 import sys, os, time, json, argparse, io, contextlib
 
@@ -65,7 +65,7 @@ def one(new_kind, old_kind, new_is_red, think, seed, max_ply, no_cap):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--new", default="pypy", help="新版引擎 kind (referee 的选项名)")
-    ap.add_argument("--old", default="pypy512", help="基线引擎 kind")
+    ap.add_argument("--old", default="pypy", help="基线引擎 kind")
     ap.add_argument("--pairs", type=int, default=10)
     ap.add_argument("--think-time", type=float, default=1.0)
     ap.add_argument("--max-ply", type=int, default=400)

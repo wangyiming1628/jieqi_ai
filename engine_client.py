@@ -1,9 +1,8 @@
 """
 揭棋引擎客户端 - 在主进程 (CPython, 带 cv2/paddleocr) 中启动引擎子进程。
 
-支持两种引擎, 二选一:
+引擎:
   - "pypy" : miaosiSari/Jieqi 纯算法引擎 (PyPy/CPython 子进程, alpha-beta 搜索)   [默认]
-  - "java" : Makinuohara/2026-jieqi-AI 引擎 (Java 子进程, expectiminimax 搜索)
 
 设计:
   - 子进程常驻, stdin/stdout 逐行 JSON 通信 (避免每步启停 + JIT/JVM 反复启动开销)。
@@ -130,63 +129,13 @@ class _EngineClientBase:
             self._proc = None
 
 
-class JavaEngineClient(_EngineClientBase):
-    """Makinuohara 引擎 (Java 子进程, expectiminimax)。"""
-
-    def __init__(self):
-        super().__init__()
-        self.classes_dir = os.path.join(self.base_dir, "engines", "mak", "classes")
-        self.main_class = "edu.bupt.jieqi.bridge.EngineBridge"
-        self.java_bin = self._pick_java()
-        if self.java_bin is None:
-            raise RuntimeError("未找到 java, 无法启动 Java 引擎 (请安装 JDK 21)")
-        if not os.path.isdir(self.classes_dir):
-            raise RuntimeError(f"未找到引擎 classes 目录: {self.classes_dir}")
-        self._start()
-
-    def _pick_java(self):
-        # 候选顺序: 环境变量 JAVA_HOME -> Homebrew openjdk@21 -> PATH 里的 java。
-        # 注意: macOS 的 /usr/bin/java 可能是 stub (未装真正 JDK 时无法运行),
-        # 所以逐个候选实际执行 `java -version` 验证可用性。
-        candidates = []
-        jh = os.environ.get("JAVA_HOME")
-        if jh:
-            candidates.append(os.path.join(jh, "bin", "java"))
-        candidates += [
-            "/opt/homebrew/opt/openjdk@21/bin/java",
-            "/usr/local/opt/openjdk@21/bin/java",
-        ]
-        w = shutil.which("java")
-        if w:
-            candidates.append(w)
-        for cand in candidates:
-            if cand and os.path.exists(cand) and self._java_works(cand):
-                return cand
-        return None
-
-    @staticmethod
-    def _java_works(java_bin):
-        try:
-            r = subprocess.run([java_bin, "-version"], capture_output=True, timeout=10)
-            return r.returncode == 0
-        except Exception:
-            return False
-
-    def _launch_cmd(self):
-        return [self.java_bin, "-cp", self.classes_dir, self.main_class]
-
-    def _label(self):
-        return f"Makinuohara/Java: {os.path.basename(self.java_bin)}"
-
-
 class PypyEngineClient(_EngineClientBase):
     """miaosiSari 纯算法引擎 (PyPy 优先, 回退 CPython)。"""
 
     def __init__(self, prefer_pypy=True, server_path=None, extra_env=None):
         super().__init__()
-        # server_path 可指定引擎服务端脚本: 默认原版 engine_server.py;
-        # 优化版 (TT保留+双时限) 传 engine_server_v2.py
-        # extra_env: 注入子进程环境变量, 用于 A/B 消融实验时切换引擎旋钮
+        # server_path 可指定引擎服务端脚本 (默认 engine_server.py)
+        # extra_env: 注入子进程环境变量, 用于消融实验时切换引擎旋钮
         #            (例: {"JIEQI_DET_SIDES": "mine"}); 引擎无对应 setter 时静默忽略
         self.server_path = server_path or os.path.join(self.base_dir, "engine_server.py")
         self.prefer_pypy = prefer_pypy
@@ -211,14 +160,7 @@ class PypyEngineClient(_EngineClientBase):
 
 
 def create_engine(engine_type="pypy", prefer_pypy=True):
-    """引擎工厂。engine_type: "pypy"(默认) 或 "java"。
-    java 不可用(无 JDK 或无 classes)时自动回退到 pypy。"""
-    if engine_type == "java":
-        try:
-            return JavaEngineClient()
-        except Exception as e:
-            print(f"[!] Java 引擎不可用 ({e}), 回退 miaosiSari 引擎")
-            return PypyEngineClient(prefer_pypy=prefer_pypy)
+    """引擎工厂。engine_type: "pypy"(默认), 参数保留以兼容旧调用。"""
     return PypyEngineClient(prefer_pypy=prefer_pypy)
 
 
@@ -230,10 +172,9 @@ class JieQiEngineClient(PypyEngineClient):
 if __name__ == "__main__":
     import argparse
     ap = argparse.ArgumentParser()
-    ap.add_argument("--engine", default="pypy", choices=["pypy", "java"])
     args = ap.parse_args()
 
-    c = create_engine(args.engine)
+    c = create_engine()
     b = [["."] * 9 for _ in range(10)]
     for col in range(9):
         b[9][col] = "r帥" if col == 4 else "r?"

@@ -22,7 +22,7 @@ def _log(msg):
 
 
 def main(engine_module="jieqi_engine"):
-    """engine_module: 引擎模块名。默认原版 jieqi_engine; 优化版 (TT保留+双时限) 传 jieqi_engine_v2。"""
+    """engine_module: 引擎模块名, 默认 jieqi_engine。"""
     mod = importlib.import_module(engine_module)
     # 可选环境变量: 引擎旋钮注入 (A/B 消融实验用)。
     #   引擎若提供对应 setter 才生效, 否则静默忽略 —— 这样同一份服务端可以驱动
@@ -98,5 +98,5 @@ def main(engine_module="jieqi_engine"):
 
 
 if __name__ == "__main__":
-    # 可选命令行参数: 引擎模块名 (默认原版 jieqi_engine, 可传 jieqi_engine_v2)
+    # 可选命令行参数: 引擎模块名 (默认 jieqi_engine)
     main(sys.argv[1] if len(sys.argv) > 1 else "jieqi_engine")

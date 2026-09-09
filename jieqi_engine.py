@@ -29,11 +29,10 @@
           再精确重标定使不变量按构造成立。裁判/实战两种模式均启用。
           实测平均 L1 池误差 5.748 → 1.268 (降低 78%), 弥合了与信息论上界
           (1.081) 之间 96% 的差距; 不变量满足率 99% → 100%。
-  优化 5 (v5.13): 确定性方差风险惩罚。在 value() 唯一存在"用确定资源博不确定
-          收益"的位置 (吃对方暗子/U) 加一项 CE = E[X] - λ·σ(X) 折扣, σ 来自
-          calc_variance 解析二阶矩 (与 calc_average 同遍历, 零搜索开销)。λ=0
-          时 byte-for-byte 等价基线; λ=0.5 时 run_paired 20 局 62.5% 配对净胜
-          4:1。详见 tools/RISK_PENALTY_report_20260827.md。
+  优化 5 (v5.13, 已移除): 确定性方差风险惩罚 (CE = E[X] - λ·σ(X))。λ=0.2 与
+          λ=0.5 两轮 20 配对实测均为 45.0%~48.8%、配对 net -1, 且与 v5.13
+          报告的 62.5% 净胜无法复现, 故 v5.17 从评估中整体移除 (决策依据见
+          tools/RISK_PENALTY_report_20260827.md 与该两轮对局记录)。
   优化 6 (v5.14, 本次): make/unmake 结构级重构。原不可变字符串流水线每节点
           3 次 256 字节整串拷贝 (put×2 + rotate+swapcase) + set() 全盘 153 格
           重扫 + 大量短命对象 GC, 实测 move() 35.6μs、固定深度 6 仅 41 knps。
@@ -178,21 +177,7 @@ sumall = {0: {True: sum(di[0][True][key] for key in di[0][True]),
               False: sum(di[0][False][key] for key in di[0][False])}}
 pst = deepcopy(common.pst)
 average = {0: {}}
-risk_sigma = {0: {}}
 kaijuku = deepcopy(library.kaijuku)
-
-# ---------------- [v5.13] 确定性方差风险惩罚 (Variance-Adjusted Certainty Equivalent) ----------------
-# 动机: PIMC (根重采样+K世界投票) 实测负结果 (见 tools/PIMC_report_20260826.md) ——
-#   蒙特卡洛去逼近方差既贵(4×算力)又不准(K=4方差发散), 且丢了基线的调参经验项。
-#   这里改用解析二阶矩: calc_variance() 与 calc_average() 同一遍历一次算出池标准差,
-#   零额外搜索开销。只对"用确定资源博不确定收益"的唯一场景 (吃对方暗子/U) 生效:
-#   score += E[X] - λ·σ(X)，λ=0 时与基线 byte-for-byte 等价。
-RISK_LAMBDA = 0.0
-
-
-def set_risk_lambda(v):
-    global RISK_LAMBDA
-    RISK_LAMBDA = float(v) if v else 0.0
 
 
 # ===========================================================================
@@ -215,7 +200,7 @@ def set_risk_lambda(v):
 #     只把 pos.move() / pos.rotate() 换成 st.make() / st.unmake() / st.flip_stm()。
 #
 # 关键正确性契约:
-#   - λ=0 (RISK_LAMBDA) + 关 LMR 走 alphabeta(root=True) 在同一局面应精确等于
+#   - 关 LMR 走 alphabeta(root=True) 在同一局面应精确等于
 #     旧实现的同一调用 (子节点序列 + 根值逐字相等), 此为对拍硬闸门。
 #   - 一致性 on/off 测试由 tools/MU_diff_pairwise.py 验证 (待写)。
 # ===========================================================================
@@ -656,14 +641,10 @@ class State:
             else:
                 if q != "U":
                     score += average[v][not t][False]
-                    if RISK_LAMBDA:
-                        score -= RISK_LAMBDA * risk_sigma[v][not t][False]
                     if q == "I":
                         score += 10
                 else:
                     score += average[v][not t][True][k]
-                    if RISK_LAMBDA:
-                        score -= RISK_LAMBDA * risk_sigma[v][not t][True][k]
                     if vj >> 4 == 7 and vj & 1 == 1:
                         score += 10
                 if q == "D":
@@ -789,7 +770,6 @@ class Searcher:
         self.forbid = frozenset()
         # 平均/方差缓存: calc_average/variance 写入, value() 读取
         self.average = {0: {}}
-        self.risk_sigma = {0: {}}
 
     def _tt_key(self, st, depth, root):
         return (st.hkey, st.score, depth, root)
@@ -1001,8 +981,6 @@ class Searcher:
     def search(self, st, max_time=2.0):
         self.nodes = 0
         self.calc_average()
-        if RISK_LAMBDA:
-            self.calc_variance()
         # [v2] TT/历史表只在每次搜索开始时清一次 (原先每层迭代都清, 上层成果全部作废)
         self.tp_score = {}
         self.tp_move = {}
@@ -1083,56 +1061,6 @@ class Searcher:
         self.average = {True: {False: averagecoveredr, True: averager}, False: {False: averagecoveredb, True: averageb}}
         average[version] = deepcopy(self.average)
         return self.average
-
-    def calc_variance(self, version=0):
-        """[v5.13 风险惩罚] 解析计算暗子池标准差 (与 calc_average 同结构、同口径:
-        既算未翻开暗子的粗粒度标量 σ(对应 average[False] 的 pst["1"] 口径),
-        也算已翻开 U 子的逐位置 σ(对应 average[True][i]))。多一次遍历求二阶矩,
-        无需采样/无需重复搜索。用于给"用确定资源换不确定收益"的吃暗子/U 着法定价
-        风险: 均值-方差效用 CE = E[X] - λ·σ(X), 比 PIMC 的蒙特卡洛重搜索更直接命中
-        "方差本身"这个量, 且零额外算力开销。风险随池收窄自动衰减到 0
-        (单一类型时方差为 0, 无需额外衰减系数)。"""
-        numr = sum(di[version][True][key] for key in di[version][True])
-        numb = sum(di[version][False][key] for key in di[version][False])
-        discount_factor = common.discount_factor
-        sigmacoveredr, sigmacoveredb = 0, 0
-        sigmar, sigmab = {}, {}
-
-        if numr == 0:
-            for i in range(51, 204):
-                sigmar[i] = 0
-        else:
-            meanc = self.average[True][False]
-            varc = 0
-            for key in di[version][True]:
-                varc += di[version][True][key] * (pst["1"][key] / discount_factor - meanc) ** 2
-            sigmacoveredr = (varc / numr) ** 0.5
-            for i in range(51, 204):
-                mean = self.average[True][True][i]
-                var = 0
-                for key in di[version][True]:
-                    var += di[version][True][key] * (pst[key][i] - mean) ** 2
-                sigmar[i] = (var / numr) ** 0.5
-
-        if numb == 0:
-            for i in range(51, 204):
-                sigmab[i] = 0
-        else:
-            meanc = self.average[False][False]
-            varc = 0
-            for key in di[version][False]:
-                varc += di[version][False][key] * (pst["1"][key.swapcase()] / discount_factor - meanc) ** 2
-            sigmacoveredb = (varc / numb) ** 0.5
-            for i in range(51, 204):
-                mean = self.average[False][True][i]
-                var = 0
-                for key in di[version][False]:
-                    var += di[version][False][key] * (pst[key.swapcase()][i] - mean) ** 2
-                sigmab[i] = (var / numb) ** 0.5
-
-        self.risk_sigma = {True: {False: sigmacoveredr, True: sigmar}, False: {False: sigmacoveredb, True: sigmab}}
-        risk_sigma[version] = deepcopy(self.risk_sigma)
-        return self.risk_sigma
 
 
 # ---------------------------------------------------------------------------

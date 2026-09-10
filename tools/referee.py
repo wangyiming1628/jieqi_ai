@@ -22,7 +22,7 @@ import sys, os, time, json, random, argparse
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO)
 
-from engine_client import PypyEngineClient  # noqa: E402
+from engine_client import BinaryEngineClient, PypyEngineClient  # noqa: E402
 from jieqi_engine import (  # noqa: E402
     Position, board_to_engine_string, _row_col_to_engine_idx,
 )
@@ -168,8 +168,11 @@ class PerpCheckTracker:
 
 
 def make_engine(kind="pypy"):
+    if kind == "cpp":
+        # C++ 移植版 (cpp/jieqi_engine), 与 Python 版逐字节等价
+        return BinaryEngineClient(), "cpp (C++ 移植版, 与 v5.17 等价)"
     if kind != "pypy":
-        raise ValueError(f"未知引擎 kind: {kind} (旧版本引擎已随清理移除, 仅支持 pypy)")
+        raise ValueError(f"未知引擎 kind: {kind} (可选: pypy / cpp)")
     return PypyEngineClient(prefer_pypy=True), "pypy (miaosiSari, alpha-beta)"
 
 
@@ -357,8 +360,8 @@ def report(args, board, records, stats, result, wall):
 
 def main():
     ap = argparse.ArgumentParser(description="揭棋引擎裁判: pypy vs pypy 完整对局")
-    ap.add_argument("--red", choices=["pypy"], default="pypy", help="红方引擎 (默认 pypy)")
-    ap.add_argument("--black", choices=["pypy"], default="pypy", help="黑方引擎 (默认 pypy)")
+    ap.add_argument("--red", choices=["pypy", "cpp"], default="pypy", help="红方引擎 (默认 pypy)")
+    ap.add_argument("--black", choices=["pypy", "cpp"], default="pypy", help="黑方引擎 (默认 pypy)")
     ap.add_argument("--think-time", type=float, default=1.0, help="双方每着思考秒数 (默认 1.0)")
     ap.add_argument("--red-think", type=float, default=None, help="红方每着思考秒数 (缺省用 --think-time)")
     ap.add_argument("--black-think", type=float, default=None, help="黑方每着思考秒数 (缺省用 --think-time)")

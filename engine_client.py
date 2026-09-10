@@ -159,6 +159,26 @@ class PypyEngineClient(_EngineClientBase):
         return f"{self.runtime_label}: {os.path.basename(self.python_bin)}"
 
 
+class BinaryEngineClient(_EngineClientBase):
+    """原生可执行引擎 (C++ 移植版 cpp/jieqi_engine), 协议与 PyPy 服务端完全一致。
+    用于与 Python 引擎在同一裁判下直接对拍 (不经过 Python 解释器与子进程启动开销)。"""
+
+    def __init__(self, binary_path=None):
+        super().__init__()
+        self.binary_path = binary_path or os.path.join(self.base_dir, "cpp", "jieqi_engine")
+        if not os.path.isfile(self.binary_path):
+            raise RuntimeError(f"未找到 C++ 引擎可执行文件: {self.binary_path} (请先编译)")
+        if not os.access(self.binary_path, os.X_OK):
+            raise RuntimeError(f"C++ 引擎不可执行: {self.binary_path}")
+        self._start()
+
+    def _launch_cmd(self):
+        return [self.binary_path]
+
+    def _label(self):
+        return f"C++: {os.path.basename(self.binary_path)}"
+
+
 def create_engine(engine_type="pypy", prefer_pypy=True):
     """引擎工厂。engine_type: "pypy"(默认), 参数保留以兼容旧调用。"""
     return PypyEngineClient(prefer_pypy=prefer_pypy)

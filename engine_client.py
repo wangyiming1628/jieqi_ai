@@ -180,7 +180,16 @@ class BinaryEngineClient(_EngineClientBase):
 
 
 def create_engine(engine_type="pypy", prefer_pypy=True):
-    """引擎工厂。engine_type: "pypy"(默认), 参数保留以兼容旧调用。"""
+    """引擎工厂。
+
+    engine_type:
+      - "pypy" / "python" / "py": miaosiSari alpha-beta 引擎 (经 PyPy 子进程启动, 默认)
+      - "cpp" / "binary" / "c++": C++ 移植版原生可执行引擎 (cpp/jieqi_engine, 与 v5.17 等价)
+    prefer_pypy: 仅对 pypy 类型生效 (优先尝试 pypy 运行时, 回退 cpython)。
+    """
+    et = (engine_type or "pypy").lower()
+    if et in ("cpp", "binary", "c++"):
+        return BinaryEngineClient()
     return PypyEngineClient(prefer_pypy=prefer_pypy)
 
 

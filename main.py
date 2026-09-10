@@ -10,7 +10,7 @@ MY_BOX_X1, MY_BOX_Y1 = 2708, 1461
 MY_BOX_X2, MY_BOX_Y2 = 2867, 1617
 CROP_W, CROP_H = (1529, 1695) if sys.platform == "darwin" else (1035, 1143)
 
-# 引擎选择: "pypy" = miaosiSari(alpha-beta)
+# 引擎选择: "pypy" = miaosiSari(alpha-beta, 经 PyPy 子进程); "cpp" = C++ 移植版原生引擎 (cpp/jieqi_engine, 与 v5.17 等价, 更快)
 ENGINE_TYPE = "pypy"
 
 PIECE_NAME = {

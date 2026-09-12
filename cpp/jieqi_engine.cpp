@@ -653,7 +653,7 @@ struct Searcher {
     std::unordered_map<MVKey, pair<int,int>, MVKeyHash> tp_move;
     std::unordered_map<uint32_t, long long> history_heur;
     long long nodes = 0;
-    int lmr_full_moves = 4, lmr_min_depth = 3, lmr_base_reduction = 1;
+    int lmr_full_moves = 2, lmr_min_depth = 2, lmr_base_reduction = 1;
     double deadline = 0.0;
     int check_interval = 2048;
     int qs_depth = 8;
@@ -807,7 +807,10 @@ struct Searcher {
                 st.unmake();
             } else {
                 if (do_lmr) {
-                    int reduced = depth - 1 - lmr_base_reduction;
+                    // 对数缩减: 越深/越靠后的着法减得越多 (标准 LMR 公式)
+                    int R = (int)(0.5 + std::log((double)depth) * std::log((double)(move_idx + 1)) / 2.0);
+                    if (R < lmr_base_reduction) R = lmr_base_reduction;
+                    int reduced = depth - 1 - R;
                     if (reduced < 1) reduced = 1;
                     st.make(move.first, move.second);
                     val = -alphabeta(st, -alpha - 1, -alpha, reduced, false, nullmove, nullmove_now);

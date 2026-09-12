@@ -18,7 +18,7 @@
 用法:
     python tools/run_paired.py --pairs 10
     # 指定基线 kind (需 referee.make_engine 支持, 旧版本引擎已随清理移除):
-    python tools/run_paired.py --new pypy --old pypy --pairs 10
+    python tools/run_paired.py --new cpp --old cpp --pairs 10
 """
 import sys, os, time, json, argparse, io, contextlib
 
@@ -64,8 +64,8 @@ def one(new_kind, old_kind, new_is_red, think, seed, max_ply, no_cap):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--new", default="pypy", help="新版引擎 kind (referee 的选项名)")
-    ap.add_argument("--old", default="pypy", help="基线引擎 kind")
+    ap.add_argument("--new", default="cpp", help="新版引擎 kind (referee 的选项名, 仅 cpp)")
+    ap.add_argument("--old", default="cpp", help="基线引擎 kind (仅 cpp)")
     ap.add_argument("--pairs", type=int, default=10)
     ap.add_argument("--think-time", type=float, default=1.0)
     ap.add_argument("--max-ply", type=int, default=400)

@@ -2,14 +2,14 @@
 揭棋引擎客户端 - 在主进程 (CPython, 带 cv2/paddleocr) 中启动引擎子进程。
 
 引擎:
-  - "pypy" : miaosiSari/Jieqi 纯算法引擎 (PyPy/CPython 子进程, alpha-beta 搜索)   [默认]
+  - "cpp" : C++ 移植版原生可执行引擎 (cpp/jieqi_engine, 与 v5.17 等价)   [默认]
 
 设计:
-  - 子进程常驻, stdin/stdout 逐行 JSON 通信 (避免每步启停 + JIT/JVM 反复启动开销)。
+  - 子进程常驻, stdin/stdout 逐行 JSON 通信 (避免每步启停开销)。
   - get_best_move() 接口统一, 主程序改动最小。
   - 读响应带超时保护; 子进程崩溃/超时会自动重启, 本次调用返回 None。
 """
-import sys, os, json, shutil, subprocess, threading, queue, time
+import os, json, subprocess, threading, queue, time
 
 
 class _EngineClientBase:
@@ -129,38 +129,8 @@ class _EngineClientBase:
             self._proc = None
 
 
-class PypyEngineClient(_EngineClientBase):
-    """miaosiSari 纯算法引擎 (PyPy 优先, 回退 CPython)。"""
-
-    def __init__(self, prefer_pypy=True, server_path=None, extra_env=None):
-        super().__init__()
-        # server_path 可指定引擎服务端脚本 (默认 engine_server.py)
-        # extra_env: 注入子进程环境变量, 用于消融实验时切换引擎旋钮
-        #            (例: {"JIEQI_DET_SIDES": "mine"}); 引擎无对应 setter 时静默忽略
-        self.server_path = server_path or os.path.join(self.base_dir, "engine_server.py")
-        self.prefer_pypy = prefer_pypy
-        self.extra_env = extra_env or {}
-        self.python_bin = self._pick_interpreter()
-        self.runtime_label = "PyPy" if "pypy" in os.path.basename(self.python_bin).lower() else "CPython"
-        self._start()
-
-    def _pick_interpreter(self):
-        if self.prefer_pypy:
-            for name in ("pypy3", "pypy3.11", "pypy"):
-                p = shutil.which(name)
-                if p:
-                    return p
-        return sys.executable
-
-    def _launch_cmd(self):
-        return [self.python_bin, self.server_path]
-
-    def _label(self):
-        return f"{self.runtime_label}: {os.path.basename(self.python_bin)}"
-
-
 class BinaryEngineClient(_EngineClientBase):
-    """原生可执行引擎 (C++ 移植版 cpp/jieqi_engine), 协议与 PyPy 服务端完全一致。
+    """原生可执行引擎 (C++ 移植版 cpp/jieqi_engine), 协议与 Python 版引擎一致。
     用于与 Python 引擎在同一裁判下直接对拍 (不经过 Python 解释器与子进程启动开销)。"""
 
     def __init__(self, binary_path=None):
@@ -179,23 +149,16 @@ class BinaryEngineClient(_EngineClientBase):
         return f"C++: {os.path.basename(self.binary_path)}"
 
 
-def create_engine(engine_type="pypy", prefer_pypy=True):
+def create_engine(engine_type="cpp"):
     """引擎工厂。
 
-    engine_type:
-      - "pypy" / "python" / "py": miaosiSari alpha-beta 引擎 (经 PyPy 子进程启动, 默认)
-      - "cpp" / "binary" / "c++": C++ 移植版原生可执行引擎 (cpp/jieqi_engine, 与 v5.17 等价)
-    prefer_pypy: 仅对 pypy 类型生效 (优先尝试 pypy 运行时, 回退 cpython)。
+    engine_type: "cpp" / "binary" / "c++" (默认 cpp)
+      -> C++ 移植版原生可执行引擎 (cpp/jieqi_engine, 与 v5.17 等价)。
     """
-    et = (engine_type or "pypy").lower()
-    if et in ("cpp", "binary", "c++"):
-        return BinaryEngineClient()
-    return PypyEngineClient(prefer_pypy=prefer_pypy)
-
-
-# 向后兼容: 旧名保留 (miaosiSari PyPy 引擎)
-class JieQiEngineClient(PypyEngineClient):
-    pass
+    et = (engine_type or "cpp").lower()
+    if et not in ("cpp", "binary", "c++"):
+        raise ValueError(f"未知引擎类型: {engine_type} (仅支持 cpp)")
+    return BinaryEngineClient()
 
 
 if __name__ == "__main__":

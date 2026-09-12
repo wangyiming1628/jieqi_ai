@@ -2,10 +2,10 @@
 揭棋引擎裁判程序 - 让两个引擎完整对局一局, 汇报双方用时与对局胜负
 
 用法:
-  python tools/referee.py                          # pypy(红) vs pypy(黑), 每着 1.0s
+  python tools/referee.py                          # cpp(红) vs cpp(黑), 每着 1.0s
   python tools/referee.py --think-time 0.5 --seed 42
   # 双方单独指定思考预算:
-  python tools/referee.py --red pypy --red-think 2.5 --black pypy --black-think 1.0
+  python tools/referee.py --red cpp --red-think 2.5 --black cpp --black-think 1.0
 
 设计:
   - 裁判维护真实棋盘: 暗子真身随机洗牌后只有裁判知道, 引擎只收到公共视野(暗子显示为 ?),
@@ -22,7 +22,7 @@ import sys, os, time, json, random, argparse
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO)
 
-from engine_client import BinaryEngineClient, PypyEngineClient  # noqa: E402
+from engine_client import BinaryEngineClient  # noqa: E402
 from jieqi_engine import (  # noqa: E402
     Position, board_to_engine_string, _row_col_to_engine_idx,
 )
@@ -167,13 +167,11 @@ class PerpCheckTracker:
                 "retired": self.retired}
 
 
-def make_engine(kind="pypy"):
+def make_engine(kind="cpp"):
     if kind == "cpp":
         # C++ 移植版 (cpp/jieqi_engine), 与 Python 版逐字节等价
         return BinaryEngineClient(), "cpp (C++ 移植版, 与 v5.17 等价)"
-    if kind != "pypy":
-        raise ValueError(f"未知引擎 kind: {kind} (可选: pypy / cpp)")
-    return PypyEngineClient(prefer_pypy=True), "pypy (miaosiSari, alpha-beta)"
+    raise ValueError(f"未知引擎 kind: {kind} (仅支持 cpp)")
 
 
 def ask_engine(engine, view, side, think_time, check_state=None):
@@ -359,9 +357,9 @@ def report(args, board, records, stats, result, wall):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="揭棋引擎裁判: pypy vs pypy 完整对局")
-    ap.add_argument("--red", choices=["pypy", "cpp"], default="pypy", help="红方引擎 (默认 pypy)")
-    ap.add_argument("--black", choices=["pypy", "cpp"], default="pypy", help="黑方引擎 (默认 pypy)")
+    ap = argparse.ArgumentParser(description="揭棋引擎裁判: cpp vs cpp 完整对局")
+    ap.add_argument("--red", choices=["cpp"], default="cpp", help="红方引擎 (默认 cpp)")
+    ap.add_argument("--black", choices=["cpp"], default="cpp", help="黑方引擎 (默认 cpp)")
     ap.add_argument("--think-time", type=float, default=1.0, help="双方每着思考秒数 (默认 1.0)")
     ap.add_argument("--red-think", type=float, default=None, help="红方每着思考秒数 (缺省用 --think-time)")
     ap.add_argument("--black-think", type=float, default=None, help="黑方每着思考秒数 (缺省用 --think-time)")

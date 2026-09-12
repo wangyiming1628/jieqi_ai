@@ -30,16 +30,19 @@ import referee  # noqa: E402
 
 
 class Args:
-    def __init__(self, red, black, think, seed, max_ply, no_cap):
+    def __init__(self, red, black, think, seed, max_ply, no_cap, red_bin=None, black_bin=None):
         self.red, self.black = red, black
         self.think_time = self.red_think = self.black_think = think
         self.seed, self.max_ply, self.no_cap_draw = seed, max_ply, no_cap
+        self.red_bin, self.black_bin = red_bin, black_bin
 
 
-def one(new_kind, old_kind, new_is_red, think, seed, max_ply, no_cap):
+def one(new_kind, old_kind, new_is_red, think, seed, max_ply, no_cap, new_bin=None, old_bin=None):
     a = Args(new_kind if new_is_red else old_kind,
              old_kind if new_is_red else new_kind,
-             think, seed, max_ply, no_cap)
+             think, seed, max_ply, no_cap,
+             red_bin=new_bin if new_is_red else old_bin,
+             black_bin=old_bin if new_is_red else new_bin)
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
         board, recs, stats, res, wall = referee.play(a)
@@ -66,6 +69,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--new", default="cpp", help="新版引擎 kind (referee 的选项名, 仅 cpp)")
     ap.add_argument("--old", default="cpp", help="基线引擎 kind (仅 cpp)")
+    ap.add_argument("--new-bin", default=None, help="新版引擎二进制路径 (默认 cpp/jieqi_engine)")
+    ap.add_argument("--old-bin", default=None, help="基线引擎二进制路径 (默认 cpp/jieqi_engine)")
     ap.add_argument("--pairs", type=int, default=10)
     ap.add_argument("--think-time", type=float, default=1.0)
     ap.add_argument("--max-ply", type=int, default=400)
@@ -85,10 +90,10 @@ def main():
     for i in range(1, a.pairs + 1):
         seed = a.base_seed + i * 13
         print(f"\n{'=' * 66}\n[对 {i}/{a.pairs}] seed={seed}", flush=True)
-        g1 = one(a.new, a.old, True, a.think_time, seed, a.max_ply, a.no_cap_draw)
+        g1 = one(a.new, a.old, True, a.think_time, seed, a.max_ply, a.no_cap_draw, a.new_bin, a.old_bin)
         print(f"  A) 新版执红: {g1['outcome']:4s} ({g1['plies']} 着) {g1['reason'][:38]}",
               flush=True)
-        g2 = one(a.new, a.old, False, a.think_time, seed, a.max_ply, a.no_cap_draw)
+        g2 = one(a.new, a.old, False, a.think_time, seed, a.max_ply, a.no_cap_draw, a.new_bin, a.old_bin)
         print(f"  B) 新版执黑: {g2['outcome']:4s} ({g2['plies']} 着) {g2['reason'][:38]}",
               flush=True)
         sc = {"win": 1.0, "draw": 0.5, "loss": 0.0}

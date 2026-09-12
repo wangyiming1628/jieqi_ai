@@ -167,10 +167,10 @@ class PerpCheckTracker:
                 "retired": self.retired}
 
 
-def make_engine(kind="cpp"):
+def make_engine(kind="cpp", binary_path=None):
     if kind == "cpp":
         # C++ 移植版 (cpp/jieqi_engine), 与 Python 版逐字节等价
-        return BinaryEngineClient(), "cpp (C++ 移植版, 与 v5.17 等价)"
+        return BinaryEngineClient(binary_path=binary_path), "cpp (C++ 移植版, 与 v5.17 等价)"
     raise ValueError(f"未知引擎 kind: {kind} (仅支持 cpp)")
 
 
@@ -199,7 +199,8 @@ def play(args):
     engines, labels = {}, {}
     for side in "rb":
         kind = args.red if side == "r" else args.black
-        engines[side], labels[side] = make_engine(kind)
+        binp = args.red_bin if side == "r" else args.black_bin
+        engines[side], labels[side] = make_engine(kind, binary_path=binp)
     print(f"[*] 红方引擎: {labels['r']}")
     print(f"[*] 黑方引擎: {labels['b']}", flush=True)
 
